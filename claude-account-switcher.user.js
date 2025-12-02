@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Claude Account Switcher
 // @namespace    https://github.com/jms830
-// @version      1.3.2
-// @description  Gmail-style account switcher for Claude.ai - adds "Switch Account" to user menu
+// @version      2.0.0
+// @description  Gmail-style account switcher for Claude.ai - standalone floating button
 // @match        https://claude.ai/*
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -18,409 +18,415 @@
 
     const CONFIG = {
         storageKey: 'claude_accounts_v2',
-        checkInterval: 300,
+        positionKey: 'claude_switcher_position',
     };
 
-    // Inject styles
-    GM_addStyle(`
-        /* Switch Account menu item */
-        .account-switch-item {
-            font-size: 14px;
-            min-height: 32px;
-            padding: 6px 8px;
-            border-radius: 8px;
-            cursor: pointer;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            gap: 8px;
-            align-items: center;
-            outline: none;
-            user-select: none;
-        }
-
-        .account-switch-item:hover {
-            background-color: var(--bg-200, rgba(0,0,0,0.05));
-        }
-
-        .account-switch-inner {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            width: 100%;
-        }
-
-        .account-switch-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 20px;
-            height: 20px;
-            flex-shrink: 0;
-        }
-
-        .account-switch-label {
-            flex: 1;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        /* Submenu styles */
-        .account-submenu {
-            position: fixed;
-            background-color: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 12px;
-            min-width: 280px;
-            max-width: 320px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-            z-index: 99999;
-            overflow: hidden;
-            opacity: 0;
-            transform: translateX(8px);
-            transition: opacity 0.15s ease, transform 0.15s ease;
-            pointer-events: none;
-        }
-
-        .account-submenu.visible {
-            opacity: 1;
-            transform: translateX(0);
-            pointer-events: auto;
-        }
-
-        .account-submenu-header {
-            padding: 12px 12px 8px;
-            font-size: 11px;
-            font-weight: 500;
-            text-transform: uppercase;
-            color: var(--text-500, #888);
-            letter-spacing: 0.5px;
-        }
-
-        .account-submenu-list {
-            max-height: 240px;
-            overflow-y: auto;
-        }
-
-        .account-submenu-item {
-            display: flex;
-            align-items: center;
-            padding: 10px 12px;
-            gap: 12px;
-            cursor: pointer;
-            transition: background-color 0.1s ease;
-        }
-
-        .account-submenu-item:hover {
-            background-color: var(--bg-200, rgba(255,255,255,0.05));
-        }
-
-        .account-submenu-avatar {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            font-size: 13px;
-            color: #fff;
-            flex-shrink: 0;
-        }
-
-        .account-submenu-info {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .account-submenu-name {
-            font-size: 14px;
-            font-weight: 500;
-            color: var(--text-100, #fff);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .account-submenu-email {
-            font-size: 12px;
-            color: var(--text-400, #888);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .account-submenu-badge {
-            font-size: 9px;
-            padding: 2px 5px;
-            border-radius: 3px;
-            font-weight: 600;
-            text-transform: uppercase;
-            flex-shrink: 0;
-        }
-
-        .account-submenu-badge.work {
-            background-color: rgba(21, 101, 192, 0.2);
-            color: #64b5f6;
-        }
-
-        .account-submenu-badge.personal {
-            background-color: rgba(123, 31, 162, 0.2);
-            color: #ce93d8;
-        }
-
-        .account-submenu-footer {
-            border-top: 0.5px solid var(--border-200, #333);
-            padding: 8px;
-        }
-
-        .account-submenu-action {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 10px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 13px;
-            color: var(--text-300, #aaa);
-            transition: background-color 0.1s ease;
-        }
-
-        .account-submenu-action:hover {
-            background-color: var(--bg-200, rgba(255,255,255,0.05));
-            color: var(--text-100, #fff);
-        }
-
-        .account-submenu-action svg {
-            width: 16px;
-            height: 16px;
-            opacity: 0.7;
-        }
-
-        .account-submenu-empty {
-            padding: 20px 16px;
-            text-align: center;
-            color: var(--text-400, #888);
-            font-size: 13px;
-        }
-
-        /* Modal styles */
-        .account-modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(0, 0, 0, 0.6);
-            z-index: 10002;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.2s ease;
-            pointer-events: none;
-        }
-
-        .account-modal-overlay.visible {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        .account-modal {
-            background-color: var(--bg-000, #1e1e1c);
-            border: 1px solid var(--border-200, #3f3f3c);
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            width: 420px;
-            max-width: 90vw;
-            max-height: 85vh;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            transform: scale(0.95);
-            transition: transform 0.2s ease;
-        }
-
-        .account-modal-overlay.visible .account-modal {
-            transform: scale(1);
-        }
-
-        .account-modal-header {
-            padding: 20px 24px;
-            border-bottom: 1px solid var(--border-200, #3f3f3c);
-        }
-
-        .account-modal-header h2 {
-            margin: 0;
-            font-size: 17px;
-            font-weight: 600;
-            color: var(--text-100, #f5f4ef);
-        }
-
-        .account-modal-body {
-            padding: 20px 24px;
-            overflow-y: auto;
-            flex: 1;
-        }
-
-        .account-form-group {
-            margin-bottom: 18px;
-        }
-
-        .account-form-group:last-child {
-            margin-bottom: 0;
-        }
-
-        .account-form-group label {
-            display: block;
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--text-200, #ccc);
-            margin-bottom: 6px;
-        }
-
-        .account-form-group input,
-        .account-form-group select,
-        .account-form-group textarea {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid var(--border-300, #3f3f3c);
-            border-radius: 8px;
-            font-size: 14px;
-            background-color: var(--bg-100, #2b2a27);
-            color: var(--text-100, #f5f4ef);
-            box-sizing: border-box;
-            font-family: inherit;
-        }
-
-        .account-form-group textarea {
-            font-family: monospace;
-            font-size: 12px;
-            resize: vertical;
-            min-height: 70px;
-        }
-
-        .account-form-group input:focus,
-        .account-form-group select:focus,
-        .account-form-group textarea:focus {
-            outline: none;
-            border-color: #c96442;
-            box-shadow: 0 0 0 2px rgba(201, 100, 66, 0.2);
-        }
-
-        .account-form-hint {
-            font-size: 11px;
-            color: var(--text-400, #888);
-            margin-top: 5px;
-            line-height: 1.4;
-        }
-
-        .account-modal-footer {
-            padding: 16px 24px;
-            border-top: 1px solid var(--border-200, #3f3f3c);
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-        }
-
-        .account-btn {
-            padding: 9px 18px;
-            border-radius: 8px;
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            border: none;
-        }
-
-        .account-btn-secondary {
-            background-color: var(--bg-200, #3f3f3c);
-            color: var(--text-100, #f5f4ef);
-        }
-
-        .account-btn-secondary:hover {
-            background-color: var(--bg-300, #4a4a47);
-        }
-
-        .account-btn-primary {
-            background-color: #c96442;
-            color: #fff;
-        }
-
-        .account-btn-primary:hover {
-            background-color: #b85a3a;
-        }
-
-        .account-btn-danger {
-            background-color: #dc3545;
-            color: #fff;
-        }
-
-        .account-btn-danger:hover {
-            background-color: #c82333;
-        }
-
-        .account-color-picker {
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-        }
-
-        .account-color-option {
-            width: 26px;
-            height: 26px;
-            border-radius: 50%;
-            cursor: pointer;
-            border: 2px solid transparent;
-            transition: transform 0.1s ease, border-color 0.1s ease;
-        }
-
-        .account-color-option:hover {
-            transform: scale(1.15);
-        }
-
-        .account-color-option.selected {
-            border-color: #fff;
-        }
-
-        .info-box {
-            background-color: rgba(255, 193, 7, 0.1);
-            border: 1px solid rgba(255, 193, 7, 0.3);
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 18px;
-        }
-
-        .info-box p {
-            margin: 0;
-            color: #ffc107;
-            font-size: 12px;
-            line-height: 1.5;
-        }
-
-        .info-box code {
-            background-color: rgba(255, 255, 255, 0.1);
-            padding: 1px 5px;
-            border-radius: 3px;
-            font-family: monospace;
-            font-size: 11px;
-        }
-    `);
-
-    // Avatar colors
-    const AVATAR_COLORS = [
+    const COLORS = [
         '#c96442', '#e57373', '#f06292', '#ba68c8', '#9575cd',
         '#7986cb', '#64b5f6', '#4fc3f7', '#4dd0e1', '#4db6ac',
         '#81c784', '#aed581', '#dce775', '#fff176', '#ffd54f',
         '#ffb74d', '#ff8a65', '#a1887f', '#90a4ae', '#78909c'
     ];
 
+    // All styles in one place
+    GM_addStyle(`
+        /* Floating trigger button */
+        #cas-trigger {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #c96442, #a85636);
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 99998;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        #cas-trigger:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+        }
+        #cas-trigger svg {
+            width: 24px;
+            height: 24px;
+            color: white;
+        }
+        #cas-trigger .cas-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: #4caf50;
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            min-width: 18px;
+            height: 18px;
+            border-radius: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #1a1a1a;
+        }
+
+        /* Main panel */
+        #cas-panel {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            width: 320px;
+            background: #1e1e1c;
+            border: 1px solid #3f3f3c;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            z-index: 99999;
+            overflow: hidden;
+            display: none;
+            flex-direction: column;
+            max-height: calc(100vh - 120px);
+        }
+        #cas-panel.visible {
+            display: flex;
+        }
+
+        /* Panel header */
+        .cas-header {
+            padding: 16px;
+            border-bottom: 1px solid #3f3f3c;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .cas-header h3 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 600;
+            color: #f5f4ef;
+        }
+        .cas-close {
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+        }
+        .cas-close:hover {
+            background: #3f3f3c;
+            color: #fff;
+        }
+
+        /* Account list */
+        .cas-list {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 300px;
+        }
+        .cas-empty {
+            padding: 32px 16px;
+            text-align: center;
+            color: #888;
+            font-size: 13px;
+        }
+        .cas-account {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            gap: 12px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-bottom: 1px solid #2a2a28;
+        }
+        .cas-account:last-child {
+            border-bottom: none;
+        }
+        .cas-account:hover {
+            background: #2a2a28;
+        }
+        .cas-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+            color: #fff;
+            flex-shrink: 0;
+        }
+        .cas-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .cas-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: #f5f4ef;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .cas-email {
+            font-size: 12px;
+            color: #888;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .cas-type {
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .cas-type.work {
+            background: rgba(21, 101, 192, 0.2);
+            color: #64b5f6;
+        }
+        .cas-type.personal {
+            background: rgba(123, 31, 162, 0.2);
+            color: #ce93d8;
+        }
+        .cas-edit {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 4px;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .cas-account:hover .cas-edit {
+            opacity: 1;
+        }
+        .cas-edit:hover {
+            background: #3f3f3c;
+            color: #fff;
+        }
+
+        /* Panel footer */
+        .cas-footer {
+            padding: 12px;
+            border-top: 1px solid #3f3f3c;
+        }
+        .cas-add-btn {
+            width: 100%;
+            padding: 10px;
+            border: 1px dashed #3f3f3c;
+            border-radius: 8px;
+            background: transparent;
+            color: #888;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.15s;
+        }
+        .cas-add-btn:hover {
+            border-color: #c96442;
+            color: #c96442;
+            background: rgba(201, 100, 66, 0.1);
+        }
+
+        /* Modal */
+        .cas-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 100000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .cas-modal-overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .cas-modal {
+            background: #1e1e1c;
+            border: 1px solid #3f3f3c;
+            border-radius: 16px;
+            width: 400px;
+            max-width: 90vw;
+            max-height: 85vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transform: scale(0.95);
+            transition: transform 0.2s;
+        }
+        .cas-modal-overlay.visible .cas-modal {
+            transform: scale(1);
+        }
+        .cas-modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #3f3f3c;
+        }
+        .cas-modal-header h3 {
+            margin: 0;
+            font-size: 17px;
+            font-weight: 600;
+            color: #f5f4ef;
+        }
+        .cas-modal-body {
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .cas-modal-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #3f3f3c;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* Form elements */
+        .cas-form-group {
+            margin-bottom: 16px;
+        }
+        .cas-form-group:last-child {
+            margin-bottom: 0;
+        }
+        .cas-form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: #ccc;
+            margin-bottom: 6px;
+        }
+        .cas-form-group input,
+        .cas-form-group select,
+        .cas-form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #3f3f3c;
+            border-radius: 8px;
+            font-size: 14px;
+            background: #2b2a27;
+            color: #f5f4ef;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .cas-form-group textarea {
+            font-family: monospace;
+            font-size: 12px;
+            resize: vertical;
+            min-height: 60px;
+        }
+        .cas-form-group input:focus,
+        .cas-form-group select:focus,
+        .cas-form-group textarea:focus {
+            outline: none;
+            border-color: #c96442;
+        }
+        .cas-hint {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+        }
+        .cas-info-box {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid rgba(255, 193, 7, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 16px;
+            font-size: 12px;
+            color: #ffc107;
+            line-height: 1.5;
+        }
+        .cas-info-box code {
+            background: rgba(255,255,255,0.1);
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+
+        /* Buttons */
+        .cas-btn {
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: background 0.15s;
+        }
+        .cas-btn-secondary {
+            background: #3f3f3c;
+            color: #f5f4ef;
+        }
+        .cas-btn-secondary:hover {
+            background: #4a4a47;
+        }
+        .cas-btn-primary {
+            background: #c96442;
+            color: #fff;
+        }
+        .cas-btn-primary:hover {
+            background: #b85a3a;
+        }
+        .cas-btn-danger {
+            background: #dc3545;
+            color: #fff;
+        }
+        .cas-btn-danger:hover {
+            background: #c82333;
+        }
+
+        /* Color picker */
+        .cas-colors {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .cas-color {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.1s;
+        }
+        .cas-color:hover {
+            transform: scale(1.15);
+        }
+        .cas-color.selected {
+            border-color: #fff;
+        }
+
+        /* Keyboard shortcut hint */
+        .cas-shortcut {
+            font-size: 11px;
+            color: #666;
+            text-align: center;
+            padding: 8px;
+            border-top: 1px solid #3f3f3c;
+        }
+        .cas-shortcut kbd {
+            background: #3f3f3c;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+    `);
+
     class AccountSwitcher {
         constructor() {
             this.accounts = this.loadAccounts();
-            this.submenu = null;
+            this.panelVisible = false;
             this.init();
         }
 
@@ -432,325 +438,216 @@
             GM_setValue(CONFIG.storageKey, this.accounts);
         }
 
-        setSessionCookie(sessionKey) {
-            document.cookie = `sessionKey=${sessionKey}; path=/; domain=.claude.ai; secure; samesite=lax`;
+        init() {
+            console.log('[Account Switcher] v2.0.0 - Standalone mode');
+            this.createUI();
+            this.bindKeyboard();
         }
 
-        generateId() {
-            return 'acc_' + Math.random().toString(36).substr(2, 9);
+        createUI() {
+            // Floating trigger button
+            this.trigger = document.createElement('button');
+            this.trigger.id = 'cas-trigger';
+            this.trigger.title = 'Switch Account (Alt+S)';
+            this.trigger.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M22 21v-2a4 4 0 00-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 010 7.75"/>
+                </svg>
+                ${this.accounts.length > 0 ? `<span class="cas-badge">${this.accounts.length}</span>` : ''}
+            `;
+            this.trigger.addEventListener('click', () => this.togglePanel());
+            document.body.appendChild(this.trigger);
+
+            // Panel
+            this.panel = document.createElement('div');
+            this.panel.id = 'cas-panel';
+            document.body.appendChild(this.panel);
+
+            // Close panel when clicking outside
+            document.addEventListener('click', (e) => {
+                if (this.panelVisible && 
+                    !this.panel.contains(e.target) && 
+                    !this.trigger.contains(e.target)) {
+                    this.hidePanel();
+                }
+            });
+
+            this.renderPanel();
+        }
+
+        renderPanel() {
+            const hasAccounts = this.accounts.length > 0;
+
+            this.panel.innerHTML = `
+                <div class="cas-header">
+                    <h3>Switch Account</h3>
+                    <button class="cas-close">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="cas-list">
+                    ${hasAccounts ? this.accounts.map((acc, i) => `
+                        <div class="cas-account" data-index="${i}">
+                            <div class="cas-avatar" style="background:${acc.color}">${this.getInitials(acc.name)}</div>
+                            <div class="cas-info">
+                                <div class="cas-name">${acc.name}</div>
+                                <div class="cas-email">${acc.email || 'No email'}</div>
+                            </div>
+                            <span class="cas-type ${acc.type}">${acc.type}</span>
+                            <button class="cas-edit" data-edit="${i}" title="Edit">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    `).join('') : `
+                        <div class="cas-empty">
+                            No saved accounts yet.<br>
+                            Add your first account to start switching!
+                        </div>
+                    `}
+                </div>
+                <div class="cas-footer">
+                    <button class="cas-add-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 8v8M8 12h8"/>
+                        </svg>
+                        Add Account
+                    </button>
+                </div>
+                <div class="cas-shortcut">Press <kbd>Alt</kbd> + <kbd>S</kbd> to toggle</div>
+            `;
+
+            // Bind events
+            this.panel.querySelector('.cas-close').addEventListener('click', () => this.hidePanel());
+            this.panel.querySelector('.cas-add-btn').addEventListener('click', () => this.showModal());
+
+            this.panel.querySelectorAll('.cas-account').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    if (e.target.closest('.cas-edit')) return;
+                    this.switchTo(parseInt(el.dataset.index));
+                });
+            });
+
+            this.panel.querySelectorAll('.cas-edit').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.showModal(parseInt(btn.dataset.edit));
+                });
+            });
+
+            // Update badge
+            const badge = this.trigger.querySelector('.cas-badge');
+            if (badge) badge.textContent = this.accounts.length;
+        }
+
+        togglePanel() {
+            this.panelVisible ? this.hidePanel() : this.showPanel();
+        }
+
+        showPanel() {
+            this.renderPanel();
+            this.panel.classList.add('visible');
+            this.panelVisible = true;
+        }
+
+        hidePanel() {
+            this.panel.classList.remove('visible');
+            this.panelVisible = false;
+        }
+
+        bindKeyboard() {
+            document.addEventListener('keydown', (e) => {
+                // Alt+S to toggle panel
+                if (e.altKey && e.key.toLowerCase() === 's') {
+                    e.preventDefault();
+                    this.togglePanel();
+                }
+                // Escape to close
+                if (e.key === 'Escape' && this.panelVisible) {
+                    this.hidePanel();
+                }
+            });
+        }
+
+        switchTo(index) {
+            const account = this.accounts[index];
+            if (!account?.sessionKey) {
+                alert('No session key for this account. Please edit and add one.');
+                return;
+            }
+            this.hidePanel();
+            document.cookie = `sessionKey=${account.sessionKey}; path=/; domain=.claude.ai; secure; samesite=lax`;
+            window.location.reload();
         }
 
         getInitials(name) {
             return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
         }
 
-        init() {
-            console.log('[Account Switcher] Initialized v1.3.2');
-            this.createSubmenu();
-            this.watchForMenu();
-        }
+        showModal(editIndex = null) {
+            const isEdit = editIndex !== null;
+            const account = isEdit ? this.accounts[editIndex] : null;
+            const selectedColor = account?.color || COLORS[Math.floor(Math.random() * COLORS.length)];
 
-        createSubmenu() {
-            this.submenu = document.createElement('div');
-            this.submenu.className = 'account-submenu';
-            document.body.appendChild(this.submenu);
-        }
-
-        updateSubmenu() {
-            const hasAccounts = this.accounts.length > 0;
-
-            this.submenu.innerHTML = `
-                ${hasAccounts ? `
-                    <div class="account-submenu-header">Switch to</div>
-                    <div class="account-submenu-list">
-                        ${this.accounts.map((account, index) => `
-                            <div class="account-submenu-item" data-index="${index}">
-                                <div class="account-submenu-avatar" style="background-color: ${account.color}">
-                                    ${this.getInitials(account.name)}
-                                </div>
-                                <div class="account-submenu-info">
-                                    <div class="account-submenu-name">${account.name}</div>
-                                    <div class="account-submenu-email">${account.email || 'No email'}</div>
-                                </div>
-                                <span class="account-submenu-badge ${account.type}">${account.type}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : `
-                    <div class="account-submenu-empty">
-                        No saved accounts yet.<br>
-                        Add one to start switching!
-                    </div>
-                `}
-                <div class="account-submenu-footer">
-                    <div class="account-submenu-action" data-action="add">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M12 8v8M8 12h8"/>
-                        </svg>
-                        Add account
-                    </div>
-                    ${hasAccounts ? `
-                        <div class="account-submenu-action" data-action="manage">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
-                                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
-                            </svg>
-                            Manage accounts
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-
-            // Bind events
-            this.submenu.querySelectorAll('.account-submenu-item').forEach(item => {
-                item.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const index = parseInt(item.dataset.index);
-                    this.switchToAccount(index);
-                });
-            });
-
-            this.submenu.querySelector('[data-action="add"]')?.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.hideSubmenu();
-                this.showAddAccountModal();
-            });
-
-            this.submenu.querySelector('[data-action="manage"]')?.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.hideSubmenu();
-                this.showManageAccountsModal();
-            });
-        }
-
-        showSubmenu(anchorElement) {
-            this.updateSubmenu();
-            
-            const rect = anchorElement.getBoundingClientRect();
-            const menuRect = anchorElement.closest('[role="menu"]')?.getBoundingClientRect();
-            
-            // Calculate position - try to show to the left of the menu
-            let left, top;
-            const submenuWidth = 290;
-            
-            if (menuRect) {
-                top = rect.top;
-                left = menuRect.left - submenuWidth - 4;
-                
-                // If would go off-screen left, show to the right instead
-                if (left < 10) {
-                    left = menuRect.right + 4;
-                }
-            } else {
-                top = rect.top;
-                left = rect.left - submenuWidth - 4;
-            }
-            
-            // Ensure doesn't go off bottom of screen
-            const submenuHeight = 300; // approximate
-            if (top + submenuHeight > window.innerHeight) {
-                top = window.innerHeight - submenuHeight - 10;
-            }
-            
-            this.submenu.style.top = `${Math.max(10, top)}px`;
-            this.submenu.style.left = `${Math.max(10, left)}px`;
-
-            this.submenu.classList.add('visible');
-            console.log('[Account Switcher] Submenu shown at', { top, left });
-        }
-
-        hideSubmenu() {
-            this.submenu.classList.remove('visible');
-        }
-
-        watchForMenu() {
-            const observer = new MutationObserver(() => {
-                this.checkAndInjectMenuItem();
-            });
-
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-
-            // Also check periodically
-            setInterval(() => this.checkAndInjectMenuItem(), CONFIG.checkInterval);
-        }
-
-        checkAndInjectMenuItem() {
-            // Look for the user menu (the dropdown that appears when clicking the profile)
-            const menu = document.querySelector('[role="menu"][data-radix-menu-content]');
-            if (!menu) {
-                this.hideSubmenu();
-                return;
-            }
-
-            // Check if we've already injected our item
-            if (menu.querySelector('.account-switch-item')) {
-                return;
-            }
-
-            // Find the first separator to inject after the account section
-            const separators = menu.querySelectorAll('[role="separator"]');
-            if (separators.length === 0) return;
-
-            const firstSeparator = separators[0];
-
-            // Create our menu item
-            const switchItem = document.createElement('div');
-            switchItem.className = 'account-switch-item';
-            switchItem.setAttribute('role', 'menuitem');
-            switchItem.setAttribute('tabindex', '-1');
-            switchItem.innerHTML = `
-                <div class="account-switch-inner">
-                    <div class="account-switch-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/>
-                            <circle cx="9" cy="7" r="4"/>
-                            <path d="M22 21v-2a4 4 0 00-3-3.87"/>
-                            <path d="M16 3.13a4 4 0 010 7.75"/>
-                        </svg>
-                    </div>
-                    <span class="account-switch-label">Switch account</span>
-                </div>
-                <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor">
-                    <path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/>
-                </svg>
-            `;
-
-            // Insert before the first separator
-            firstSeparator.parentNode.insertBefore(switchItem, firstSeparator);
-
-            // Click to show submenu (more reliable than hover on some systems)
-            switchItem.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                if (this.submenu.classList.contains('visible')) {
-                    this.hideSubmenu();
-                } else {
-                    this.showSubmenu(switchItem);
-                }
-            });
-
-            // Also support hover
-            let hoverTimeout;
-            switchItem.addEventListener('mouseenter', () => {
-                clearTimeout(hoverTimeout);
-                this.showSubmenu(switchItem);
-            });
-
-            switchItem.addEventListener('mouseleave', (e) => {
-                // Check if we're moving to the submenu
-                const toElement = e.relatedTarget;
-                if (toElement && this.submenu.contains(toElement)) {
-                    return;
-                }
-                hoverTimeout = setTimeout(() => this.hideSubmenu(), 150);
-            });
-
-            this.submenu.addEventListener('mouseenter', () => {
-                clearTimeout(hoverTimeout);
-            });
-
-            this.submenu.addEventListener('mouseleave', () => {
-                hoverTimeout = setTimeout(() => this.hideSubmenu(), 150);
-            });
-
-            // Hide submenu when menu closes
-            const menuObserver = new MutationObserver((mutations) => {
-                for (const mutation of mutations) {
-                    for (const node of mutation.removedNodes) {
-                        if (node === menu || node.contains?.(menu)) {
-                            this.hideSubmenu();
-                            menuObserver.disconnect();
-                            return;
-                        }
-                    }
-                }
-            });
-
-            menuObserver.observe(document.body, { childList: true, subtree: true });
-        }
-
-        switchToAccount(index) {
-            const account = this.accounts[index];
-            if (!account || !account.sessionKey) {
-                alert('No session key for this account. Please edit the account and add a session key.');
-                return;
-            }
-
-            this.hideSubmenu();
-            this.setSessionCookie(account.sessionKey);
-            window.location.reload();
-        }
-
-        showAddAccountModal(editAccount = null, editIndex = null) {
-            const isEdit = editAccount !== null;
             const overlay = document.createElement('div');
-            overlay.className = 'account-modal-overlay';
-
-            const selectedColor = editAccount?.color || AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
-
+            overlay.className = 'cas-modal-overlay';
             overlay.innerHTML = `
-                <div class="account-modal">
-                    <div class="account-modal-header">
-                        <h2>${isEdit ? 'Edit Account' : 'Add Account'}</h2>
+                <div class="cas-modal">
+                    <div class="cas-modal-header">
+                        <h3>${isEdit ? 'Edit Account' : 'Add Account'}</h3>
                     </div>
-                    <div class="account-modal-body">
+                    <div class="cas-modal-body">
                         ${!isEdit ? `
-                            <div class="info-box">
-                                <p>
-                                    <strong>To get your session key:</strong><br>
-                                    1. Open DevTools (F12) → Application tab<br>
-                                    2. Cookies → claude.ai → find <code>sessionKey</code><br>
-                                    3. Copy the value (starts with <code>sk-ant-</code>)
-                                </p>
+                            <div class="cas-info-box">
+                                <strong>To get your session key:</strong><br>
+                                1. Open DevTools (F12) → Application tab<br>
+                                2. Cookies → claude.ai → find <code>sessionKey</code><br>
+                                3. Copy the value (starts with <code>sk-ant-</code>)
                             </div>
                         ` : ''}
-                        
-                        <div class="account-form-group">
+                        <div class="cas-form-group">
                             <label>Display Name *</label>
-                            <input type="text" id="account-name" placeholder="e.g., Work Account" value="${editAccount?.name || ''}">
+                            <input type="text" id="cas-name" value="${account?.name || ''}" placeholder="e.g., Work Account">
                         </div>
-                        
-                        <div class="account-form-group">
+                        <div class="cas-form-group">
                             <label>Email (optional)</label>
-                            <input type="email" id="account-email" placeholder="e.g., john@company.com" value="${editAccount?.email || ''}">
-                            <div class="account-form-hint">For your reference only</div>
+                            <input type="email" id="cas-email" value="${account?.email || ''}" placeholder="e.g., john@company.com">
+                            <div class="cas-hint">For your reference only</div>
                         </div>
-                        
-                        <div class="account-form-group">
+                        <div class="cas-form-group">
                             <label>Type</label>
-                            <select id="account-type">
-                                <option value="work" ${editAccount?.type === 'work' ? 'selected' : ''}>Work</option>
-                                <option value="personal" ${editAccount?.type === 'personal' ? 'selected' : ''}>Personal</option>
+                            <select id="cas-type">
+                                <option value="work" ${account?.type === 'work' ? 'selected' : ''}>Work</option>
+                                <option value="personal" ${account?.type === 'personal' ? 'selected' : ''}>Personal</option>
                             </select>
                         </div>
-                        
-                        <div class="account-form-group">
+                        <div class="cas-form-group">
                             <label>Session Key *</label>
-                            <textarea id="account-session" placeholder="sk-ant-sid01-..." ${isEdit ? 'readonly style="opacity: 0.6;"' : ''}>${editAccount?.sessionKey || ''}</textarea>
-                            ${isEdit ? '<div class="account-form-hint">Cannot be edited. Delete and re-add to change.</div>' : ''}
+                            <textarea id="cas-session" placeholder="sk-ant-sid01-...">${account?.sessionKey || ''}</textarea>
+                            ${isEdit ? '<div class="cas-hint">Leave unchanged to keep current key</div>' : ''}
                         </div>
-                        
-                        <div class="account-form-group">
+                        <div class="cas-form-group">
                             <label>Color</label>
-                            <div class="account-color-picker">
-                                ${AVATAR_COLORS.map(color => `
-                                    <div class="account-color-option ${color === selectedColor ? 'selected' : ''}" 
-                                         data-color="${color}" 
-                                         style="background-color: ${color}">
-                                    </div>
+                            <div class="cas-colors">
+                                ${COLORS.map(c => `
+                                    <div class="cas-color ${c === selectedColor ? 'selected' : ''}" 
+                                         data-color="${c}" style="background:${c}"></div>
                                 `).join('')}
                             </div>
                         </div>
                     </div>
-                    <div class="account-modal-footer">
-                        ${isEdit ? `<button class="account-btn account-btn-danger" data-action="delete" style="margin-right: auto;">Delete</button>` : ''}
-                        <button class="account-btn account-btn-secondary" data-action="cancel">Cancel</button>
-                        <button class="account-btn account-btn-primary" data-action="save">${isEdit ? 'Save' : 'Add'}</button>
+                    <div class="cas-modal-footer">
+                        ${isEdit ? '<button class="cas-btn cas-btn-danger" data-action="delete" style="margin-right:auto">Delete</button>' : ''}
+                        <button class="cas-btn cas-btn-secondary" data-action="cancel">Cancel</button>
+                        <button class="cas-btn cas-btn-primary" data-action="save">${isEdit ? 'Save' : 'Add'}</button>
                     </div>
                 </div>
             `;
@@ -758,131 +655,87 @@
             document.body.appendChild(overlay);
             requestAnimationFrame(() => overlay.classList.add('visible'));
 
-            let currentColor = selectedColor;
+            let color = selectedColor;
 
-            // Color picker
-            overlay.querySelectorAll('.account-color-option').forEach(option => {
-                option.addEventListener('click', () => {
-                    overlay.querySelectorAll('.account-color-option').forEach(o => o.classList.remove('selected'));
-                    option.classList.add('selected');
-                    currentColor = option.dataset.color;
+            // Color selection
+            overlay.querySelectorAll('.cas-color').forEach(el => {
+                el.addEventListener('click', () => {
+                    overlay.querySelectorAll('.cas-color').forEach(c => c.classList.remove('selected'));
+                    el.classList.add('selected');
+                    color = el.dataset.color;
                 });
             });
 
-            const closeModal = () => {
+            const close = () => {
                 overlay.classList.remove('visible');
                 setTimeout(() => overlay.remove(), 200);
             };
 
-            overlay.querySelector('[data-action="cancel"]').addEventListener('click', closeModal);
-            overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+            overlay.querySelector('[data-action="cancel"]').addEventListener('click', close);
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
             overlay.querySelector('[data-action="save"]').addEventListener('click', () => {
-                const name = overlay.querySelector('#account-name').value.trim();
-                const email = overlay.querySelector('#account-email').value.trim();
-                const type = overlay.querySelector('#account-type').value;
-                const sessionKey = overlay.querySelector('#account-session').value.trim();
+                const name = overlay.querySelector('#cas-name').value.trim();
+                const email = overlay.querySelector('#cas-email').value.trim();
+                const type = overlay.querySelector('#cas-type').value;
+                const sessionKey = overlay.querySelector('#cas-session').value.trim();
 
                 if (!name) { alert('Please enter a display name'); return; }
                 if (!isEdit && !sessionKey) { alert('Please enter a session key'); return; }
-                if (!isEdit && !sessionKey.startsWith('sk-ant-')) { alert('Invalid session key format'); return; }
+                if (!isEdit && !sessionKey.startsWith('sk-ant-')) { 
+                    alert('Invalid session key format. It should start with sk-ant-'); 
+                    return; 
+                }
 
                 if (isEdit) {
-                    this.accounts[editIndex] = { ...editAccount, name, email, type, color: currentColor };
+                    this.accounts[editIndex] = {
+                        ...account,
+                        name, email, type, color,
+                        sessionKey: sessionKey || account.sessionKey
+                    };
                 } else {
                     this.accounts.push({
-                        id: this.generateId(),
-                        name, email, type,
-                        color: currentColor,
-                        sessionKey,
+                        id: 'acc_' + Math.random().toString(36).substr(2, 9),
+                        name, email, type, color, sessionKey,
                         createdAt: new Date().toISOString()
                     });
                 }
 
                 this.saveAccounts();
-                closeModal();
+                this.renderPanel();
+                this.updateTriggerBadge();
+                close();
             });
 
             if (isEdit) {
                 overlay.querySelector('[data-action="delete"]').addEventListener('click', () => {
-                    if (confirm(`Delete "${editAccount.name}"?`)) {
+                    if (confirm(`Delete "${account.name}"?`)) {
                         this.accounts.splice(editIndex, 1);
                         this.saveAccounts();
-                        closeModal();
+                        this.renderPanel();
+                        this.updateTriggerBadge();
+                        close();
                     }
                 });
             }
         }
 
-        showManageAccountsModal() {
-            const overlay = document.createElement('div');
-            overlay.className = 'account-modal-overlay';
-
-            overlay.innerHTML = `
-                <div class="account-modal">
-                    <div class="account-modal-header">
-                        <h2>Manage Accounts</h2>
-                    </div>
-                    <div class="account-modal-body" style="padding: 0;">
-                        ${this.accounts.length === 0 ? `
-                            <div style="padding: 32px; text-align: center; color: var(--text-400, #888);">
-                                No accounts saved
-                            </div>
-                        ` : `
-                            <div style="max-height: 350px; overflow-y: auto;">
-                                ${this.accounts.map((account, index) => `
-                                    <div class="account-submenu-item" data-index="${index}" style="cursor: pointer;">
-                                        <div class="account-submenu-avatar" style="background-color: ${account.color}">
-                                            ${this.getInitials(account.name)}
-                                        </div>
-                                        <div class="account-submenu-info">
-                                            <div class="account-submenu-name">${account.name}</div>
-                                            <div class="account-submenu-email">${account.email || 'No email'}</div>
-                                        </div>
-                                        <span class="account-submenu-badge ${account.type}">${account.type}</span>
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.5;">
-                                            <polyline points="9 18 15 12 9 6"/>
-                                        </svg>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        `}
-                    </div>
-                    <div class="account-modal-footer">
-                        <button class="account-btn account-btn-secondary" data-action="close">Close</button>
-                        <button class="account-btn account-btn-primary" data-action="add">Add Account</button>
-                    </div>
-                </div>
-            `;
-
-            document.body.appendChild(overlay);
-            requestAnimationFrame(() => overlay.classList.add('visible'));
-
-            const closeModal = () => {
-                overlay.classList.remove('visible');
-                setTimeout(() => overlay.remove(), 200);
-            };
-
-            overlay.querySelector('[data-action="close"]').addEventListener('click', closeModal);
-            overlay.querySelector('[data-action="add"]').addEventListener('click', () => {
-                closeModal();
-                setTimeout(() => this.showAddAccountModal(), 200);
-            });
-
-            overlay.querySelectorAll('.account-submenu-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    const index = parseInt(item.dataset.index);
-                    const account = this.accounts[index];
-                    closeModal();
-                    setTimeout(() => this.showAddAccountModal(account, index), 200);
-                });
-            });
-
-            overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+        updateTriggerBadge() {
+            let badge = this.trigger.querySelector('.cas-badge');
+            if (this.accounts.length > 0) {
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'cas-badge';
+                    this.trigger.appendChild(badge);
+                }
+                badge.textContent = this.accounts.length;
+            } else if (badge) {
+                badge.remove();
+            }
         }
     }
 
-    // Initialize
+    // Initialize when ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => new AccountSwitcher());
     } else {
