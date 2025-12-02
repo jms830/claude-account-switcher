@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Claude Account Switcher
 // @namespace    https://github.com/jms830
-// @version      1.3.1
+// @version      1.3.2
 // @description  Gmail-style account switcher for Claude.ai - adds "Switch Account" to user menu
 // @match        https://claude.ai/*
 // @grant        GM_setValue
@@ -69,17 +69,14 @@
 
         /* Submenu styles */
         .account-submenu {
-            position: absolute;
-            right: 100%;
-            top: 0;
-            margin-right: 4px;
-            background-color: var(--bg-000, #1a1a1a);
-            border: 0.5px solid var(--border-200, #333);
+            position: fixed;
+            background-color: #1a1a1a;
+            border: 1px solid #333;
             border-radius: 12px;
             min-width: 280px;
             max-width: 320px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-            z-index: 10001;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+            z-index: 99999;
             overflow: hidden;
             opacity: 0;
             transform: translateX(8px);
@@ -448,7 +445,7 @@
         }
 
         init() {
-            console.log('[Account Switcher] Initialized v1.3.1');
+            console.log('[Account Switcher] Initialized v1.3.2');
             this.createSubmenu();
             this.watchForMenu();
         }
