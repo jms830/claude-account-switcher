@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Claude Account Switcher
 // @namespace    https://github.com/jms830
-// @version      1.2.1
+// @version      1.2.2
 // @description  Gmail-style account switcher for Claude.ai - instantly switch between work and personal accounts
 // @match        https://claude.ai/*
 // @grant        GM_setValue
@@ -21,7 +21,9 @@
         checkInterval: 1000,
     };
 
-    // Inject styles
+    // Inject styles - using explicit colors that work in both light and dark mode
+    // Claude dark mode: bg is dark (#2b2a27), text is light (#f5f4ef)
+    // Claude light mode: bg is light (#f5f4ef), text is dark (#1a1a1a)
     GM_addStyle(`
         .account-switcher-trigger {
             position: relative;
@@ -30,30 +32,35 @@
 
         .account-switcher-badge {
             position: absolute;
-            bottom: -2px;
-            right: -2px;
-            width: 14px;
-            height: 14px;
-            background-color: var(--accent-main-200, #c96442);
+            bottom: 4px;
+            right: 4px;
+            width: 16px;
+            height: 16px;
+            background-color: #c96442;
             border-radius: 50%;
-            border: 2px solid var(--bg-100, #fff);
+            border: 2px solid #2b2a27;
             display: flex;
             align-items: center;
             justify-content: center;
+            z-index: 10;
+        }
+
+        [data-mode="light"] .account-switcher-badge {
+            border-color: #f5f4ef;
         }
 
         .account-switcher-badge svg {
             width: 8px;
             height: 8px;
-            color: white;
+            stroke: white;
         }
 
         .account-switcher-menu {
             position: fixed;
-            background-color: var(--bg-100, #ffffff);
-            border: 1px solid var(--border-300, #e5e5e5);
+            background-color: #2b2a27;
+            border: 1px solid #3f3f3c;
             border-radius: 12px;
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
             min-width: 300px;
             max-width: 340px;
             z-index: 10000;
@@ -62,6 +69,14 @@
             transform: translateY(-8px);
             transition: opacity 0.2s ease, transform 0.2s ease;
             pointer-events: none;
+            color: #f5f4ef;
+        }
+
+        [data-mode="light"] .account-switcher-menu {
+            background-color: #ffffff;
+            border-color: #e5e5e5;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+            color: #1a1a1a;
         }
 
         .account-switcher-menu.visible {
@@ -72,17 +87,25 @@
 
         .account-switcher-header {
             padding: 16px;
-            border-bottom: 1px solid var(--border-300, #e5e5e5);
+            border-bottom: 1px solid #3f3f3c;
             display: flex;
             align-items: center;
             justify-content: space-between;
+        }
+
+        [data-mode="light"] .account-switcher-header {
+            border-bottom-color: #e5e5e5;
         }
 
         .account-switcher-header h3 {
             margin: 0;
             font-size: 14px;
             font-weight: 600;
-            color: var(--text-100, #1a1a1a);
+            color: #f5f4ef;
+        }
+
+        [data-mode="light"] .account-switcher-header h3 {
+            color: #1a1a1a;
         }
 
         .account-switcher-close {
@@ -90,7 +113,7 @@
             border: none;
             cursor: pointer;
             padding: 4px;
-            color: var(--text-300, #666);
+            color: #a0a0a0;
             border-radius: 4px;
             display: flex;
             align-items: center;
@@ -98,7 +121,11 @@
         }
 
         .account-switcher-close:hover {
-            background-color: var(--bg-200, #f0f0f0);
+            background-color: #3f3f3c;
+        }
+
+        [data-mode="light"] .account-switcher-close:hover {
+            background-color: #f0f0f0;
         }
 
         .account-switcher-list {
@@ -117,11 +144,15 @@
         }
 
         .account-switcher-item:hover {
-            background-color: var(--bg-200, #f5f5f5);
+            background-color: #3f3f3c;
+        }
+
+        [data-mode="light"] .account-switcher-item:hover {
+            background-color: #f5f5f5;
         }
 
         .account-switcher-item.active {
-            background-color: rgba(201, 100, 66, 0.1);
+            background-color: rgba(201, 100, 66, 0.15);
         }
 
         .account-switcher-item.active::before {
@@ -131,7 +162,7 @@
             top: 0;
             bottom: 0;
             width: 3px;
-            background-color: var(--accent-main-200, #c96442);
+            background-color: #c96442;
         }
 
         .account-avatar {
@@ -158,18 +189,26 @@
         .account-name {
             font-size: 14px;
             font-weight: 500;
-            color: var(--text-100, #1a1a1a);
+            color: #f5f4ef;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
+        [data-mode="light"] .account-name {
+            color: #1a1a1a;
+        }
+
         .account-email {
             font-size: 12px;
-            color: var(--text-300, #666);
+            color: #a0a0a0;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+
+        [data-mode="light"] .account-email {
+            color: #666;
         }
 
         .account-type-badge {
@@ -181,23 +220,27 @@
         }
 
         .account-type-badge.work {
-            background-color: #e3f2fd;
-            color: #1565c0;
+            background-color: #1565c0;
+            color: #e3f2fd;
         }
 
         .account-type-badge.personal {
-            background-color: #f3e5f5;
-            color: #7b1fa2;
+            background-color: #7b1fa2;
+            color: #f3e5f5;
         }
 
         .account-check {
-            color: var(--accent-main-200, #c96442);
+            color: #c96442;
             flex-shrink: 0;
         }
 
         .account-switcher-footer {
-            border-top: 1px solid var(--border-300, #e5e5e5);
+            border-top: 1px solid #3f3f3c;
             padding: 8px;
+        }
+
+        [data-mode="light"] .account-switcher-footer {
+            border-top-color: #e5e5e5;
         }
 
         .account-switcher-action {
@@ -208,18 +251,30 @@
             border-radius: 8px;
             cursor: pointer;
             transition: background-color 0.15s ease;
-            color: var(--text-200, #333);
+            color: #f5f4ef;
             font-size: 14px;
         }
 
+        [data-mode="light"] .account-switcher-action {
+            color: #333;
+        }
+
         .account-switcher-action:hover {
-            background-color: var(--bg-200, #f5f5f5);
+            background-color: #3f3f3c;
+        }
+
+        [data-mode="light"] .account-switcher-action:hover {
+            background-color: #f5f5f5;
         }
 
         .account-switcher-action svg {
             width: 20px;
             height: 20px;
-            color: var(--text-300, #666);
+            color: #a0a0a0;
+        }
+
+        [data-mode="light"] .account-switcher-action svg {
+            color: #666;
         }
 
         /* Modal styles */
@@ -229,7 +284,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background-color: rgba(0, 0, 0, 0.5);
+            background-color: rgba(0, 0, 0, 0.6);
             z-index: 10001;
             display: flex;
             align-items: center;
@@ -245,9 +300,10 @@
         }
 
         .account-modal {
-            background-color: var(--bg-100, #ffffff);
+            background-color: #2b2a27;
+            border: 1px solid #3f3f3c;
             border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
             width: 440px;
             max-width: 90vw;
             max-height: 90vh;
@@ -256,6 +312,14 @@
             flex-direction: column;
             transform: scale(0.95);
             transition: transform 0.2s ease;
+            color: #f5f4ef;
+        }
+
+        [data-mode="light"] .account-modal {
+            background-color: #ffffff;
+            border-color: #e5e5e5;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            color: #1a1a1a;
         }
 
         .account-modal-overlay.visible .account-modal {
@@ -264,15 +328,23 @@
 
         .account-modal-header {
             padding: 20px 24px;
-            border-bottom: 1px solid var(--border-300, #e5e5e5);
+            border-bottom: 1px solid #3f3f3c;
             flex-shrink: 0;
+        }
+
+        [data-mode="light"] .account-modal-header {
+            border-bottom-color: #e5e5e5;
         }
 
         .account-modal-header h2 {
             margin: 0;
             font-size: 18px;
             font-weight: 600;
-            color: var(--text-100, #1a1a1a);
+            color: #f5f4ef;
+        }
+
+        [data-mode="light"] .account-modal-header h2 {
+            color: #1a1a1a;
         }
 
         .account-modal-body {
@@ -293,8 +365,12 @@
             display: block;
             font-size: 14px;
             font-weight: 500;
-            color: var(--text-100, #1a1a1a);
+            color: #f5f4ef;
             margin-bottom: 8px;
+        }
+
+        [data-mode="light"] .account-form-group label {
+            color: #1a1a1a;
         }
 
         .account-form-group input,
@@ -302,13 +378,21 @@
         .account-form-group textarea {
             width: 100%;
             padding: 10px 12px;
-            border: 1px solid var(--border-300, #e5e5e5);
+            border: 1px solid #3f3f3c;
             border-radius: 8px;
             font-size: 14px;
-            background-color: var(--bg-100, #ffffff);
-            color: var(--text-100, #1a1a1a);
+            background-color: #1e1e1c;
+            color: #f5f4ef;
             box-sizing: border-box;
             font-family: inherit;
+        }
+
+        [data-mode="light"] .account-form-group input,
+        [data-mode="light"] .account-form-group select,
+        [data-mode="light"] .account-form-group textarea {
+            border-color: #e5e5e5;
+            background-color: #ffffff;
+            color: #1a1a1a;
         }
 
         .account-form-group textarea {
@@ -322,27 +406,35 @@
         .account-form-group select:focus,
         .account-form-group textarea:focus {
             outline: none;
-            border-color: var(--accent-main-200, #c96442);
-            box-shadow: 0 0 0 3px rgba(201, 100, 66, 0.1);
+            border-color: #c96442;
+            box-shadow: 0 0 0 3px rgba(201, 100, 66, 0.2);
         }
 
         .account-form-hint {
             font-size: 12px;
-            color: var(--text-300, #666);
+            color: #a0a0a0;
             margin-top: 6px;
         }
 
+        [data-mode="light"] .account-form-hint {
+            color: #666;
+        }
+
         .account-form-hint a {
-            color: var(--accent-main-200, #c96442);
+            color: #c96442;
         }
 
         .account-modal-footer {
             padding: 16px 24px;
-            border-top: 1px solid var(--border-300, #e5e5e5);
+            border-top: 1px solid #3f3f3c;
             display: flex;
             justify-content: flex-end;
             gap: 12px;
             flex-shrink: 0;
+        }
+
+        [data-mode="light"] .account-modal-footer {
+            border-top-color: #e5e5e5;
         }
 
         .account-btn {
@@ -356,17 +448,27 @@
         }
 
         .account-btn-secondary {
-            background-color: var(--bg-200, #f5f5f5);
-            border: 1px solid var(--border-300, #e5e5e5);
-            color: var(--text-100, #1a1a1a);
+            background-color: #3f3f3c;
+            border: 1px solid #4a4a47;
+            color: #f5f4ef;
+        }
+
+        [data-mode="light"] .account-btn-secondary {
+            background-color: #f5f5f5;
+            border-color: #e5e5e5;
+            color: #1a1a1a;
         }
 
         .account-btn-secondary:hover {
-            background-color: var(--bg-300, #e5e5e5);
+            background-color: #4a4a47;
+        }
+
+        [data-mode="light"] .account-btn-secondary:hover {
+            background-color: #e5e5e5;
         }
 
         .account-btn-primary {
-            background-color: var(--accent-main-200, #c96442);
+            background-color: #c96442;
             color: #ffffff;
         }
 
@@ -403,12 +505,16 @@
         }
 
         .account-color-option.selected {
-            border-color: var(--text-100, #1a1a1a);
+            border-color: #f5f4ef;
+        }
+
+        [data-mode="light"] .account-color-option.selected {
+            border-color: #1a1a1a;
         }
 
         .info-box {
-            background-color: #fff8e1;
-            border: 1px solid #ffcc80;
+            background-color: rgba(255, 193, 7, 0.15);
+            border: 1px solid rgba(255, 193, 7, 0.4);
             border-radius: 8px;
             padding: 12px;
             margin-bottom: 20px;
@@ -416,16 +522,29 @@
 
         .info-box p {
             margin: 0;
-            color: #e65100;
+            color: #ffc107;
             font-size: 13px;
             line-height: 1.5;
         }
 
+        [data-mode="light"] .info-box {
+            background-color: #fff8e1;
+            border-color: #ffcc80;
+        }
+
+        [data-mode="light"] .info-box p {
+            color: #e65100;
+        }
+
         .info-box code {
-            background-color: rgba(0,0,0,0.1);
+            background-color: rgba(255,255,255,0.1);
             padding: 2px 6px;
             border-radius: 4px;
             font-family: monospace;
+        }
+
+        [data-mode="light"] .info-box code {
+            background-color: rgba(0,0,0,0.1);
         }
     `);
 
