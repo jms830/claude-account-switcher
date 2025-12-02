@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Claude Account Switcher
 // @namespace    https://github.com/jms830
-// @version      2.1.0
+// @version      2.1.1
 // @description  Gmail-style account switcher for Claude.ai
 // @match        https://claude.ai/*
 // @grant        GM_setValue
@@ -30,6 +30,9 @@
     const style = document.createElement('style');
     style.textContent = `
         #cas-btn {
+            position: fixed;
+            bottom: 16px;
+            left: 220px;
             width: 32px;
             height: 32px;
             border-radius: 8px;
@@ -39,16 +42,15 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-left: 8px;
-            flex-shrink: 0;
+            z-index: 99999;
         }
         #cas-btn:hover { background: #b85a3a; }
         #cas-btn svg { width: 18px; height: 18px; color: white; }
 
         #cas-popup {
             position: fixed;
-            left: 270px;
-            bottom: 60px;
+            left: 220px;
+            bottom: 56px;
             width: 300px;
             background: #1e1e1c;
             border: 1px solid #3f3f3c;
@@ -431,27 +433,15 @@
         modalBg.classList.remove('open');
     }
 
-    // Find sidebar and inject button
+    // Inject floating button (fixed position, bottom-left near profile)
     function injectButton() {
-        // Look for the user profile button area in the sidebar
-        const sidebar = document.querySelector('nav, [class*="sidebar"], aside');
-        if (!sidebar) {
-            console.log('[CAS] Sidebar not found, retrying...');
-            return false;
-        }
-
-        // Find the bottom section with user info
-        const userSection = sidebar.querySelector('[class*="user"], [class*="profile"], [class*="account"]') 
-            || sidebar.querySelector('button[class*="truncate"]')?.parentElement
-            || sidebar.lastElementChild;
-
-        if (!userSection || document.getElementById('cas-btn')) {
-            return !!document.getElementById('cas-btn');
+        if (document.getElementById('cas-btn')) {
+            return true;
         }
 
         const btn = document.createElement('button');
         btn.id = 'cas-btn';
-        btn.title = 'Switch Account';
+        btn.title = 'Switch Account (Alt+S)';
         btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/>
             <circle cx="9" cy="7" r="4"/>
@@ -462,22 +452,14 @@
             popup.classList.toggle('open');
         };
 
-        // Try to insert it nicely
-        if (userSection.parentElement) {
-            userSection.parentElement.style.display = 'flex';
-            userSection.parentElement.style.alignItems = 'center';
-            userSection.after(btn);
-        } else {
-            userSection.appendChild(btn);
-        }
-
-        console.log('[CAS] Button injected!');
+        document.body.appendChild(btn);
+        console.log('[CAS] Button injected at bottom-left!');
         return true;
     }
 
     // Initialize
     function init() {
-        console.log('[CAS] v2.1.0 initializing...');
+        console.log('[CAS] v2.1.1 initializing...');
         createPopup();
         createModal();
 
