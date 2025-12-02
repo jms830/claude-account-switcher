@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Claude Account Switcher
 // @namespace    https://github.com/jms830
-// @version      2.0.0
+// @version      2.0.1
 // @description  Gmail-style account switcher for Claude.ai - standalone floating button
 // @match        https://claude.ai/*
 // @grant        GM_setValue
@@ -42,7 +42,7 @@
             border: none;
             cursor: pointer;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            z-index: 99998;
+            z-index: 2147483000;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -84,7 +84,7 @@
             border: 1px solid #3f3f3c;
             border-radius: 16px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-            z-index: 99999;
+            z-index: 2147483001;
             overflow: hidden;
             display: none;
             flex-direction: column;
@@ -439,7 +439,7 @@
         }
 
         init() {
-            console.log('[Account Switcher] v2.0.0 - Standalone mode');
+            console.log('[Account Switcher] v2.0.1 - Standalone mode');
             this.createUI();
             this.bindKeyboard();
         }
@@ -447,8 +447,26 @@
         createUI() {
             // Floating trigger button
             this.trigger = document.createElement('button');
+            this.trigger.type = 'button';
             this.trigger.id = 'cas-trigger';
             this.trigger.title = 'Switch Account (Alt+S)';
+            // Inline styles as fallback in case CSS isolations block GM_addStyle
+            this.trigger.style.cssText = `
+                position: fixed !important;
+                bottom: 20px;
+                right: 20px;
+                width: 48px;
+                height: 48px;
+                border-radius: 50%;
+                background: linear-gradient(135deg, #c96442, #a85636);
+                border: none;
+                cursor: pointer;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                z-index: 2147483000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
             this.trigger.innerHTML = `
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/>
@@ -460,11 +478,21 @@
             `;
             this.trigger.addEventListener('click', () => this.togglePanel());
             document.body.appendChild(this.trigger);
+            console.log('[Account Switcher] Trigger button injected', this.trigger);
 
             // Panel
             this.panel = document.createElement('div');
             this.panel.id = 'cas-panel';
+            this.panel.style.cssText = `
+                position: fixed !important;
+                bottom: 80px;
+                right: 20px;
+                width: 320px;
+                z-index: 2147483001;
+                display: none;
+            `;
             document.body.appendChild(this.panel);
+            console.log('[Account Switcher] Panel container injected', this.panel);
 
             // Close panel when clicking outside
             document.addEventListener('click', (e) => {
@@ -555,11 +583,13 @@
         showPanel() {
             this.renderPanel();
             this.panel.classList.add('visible');
+            this.panel.style.display = 'flex';
             this.panelVisible = true;
         }
 
         hidePanel() {
             this.panel.classList.remove('visible');
+            this.panel.style.display = 'none';
             this.panelVisible = false;
         }
 
