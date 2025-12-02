@@ -1,15 +1,16 @@
 // ==UserScript==
 // @name         Claude Account Switcher
-// @namespace    https://github.com/jordan
-// @version      1.1.0
+// @namespace    https://github.com/jms830
+// @version      1.2.1
 // @description  Gmail-style account switcher for Claude.ai - instantly switch between work and personal accounts
 // @match        https://claude.ai/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle
-// @grant        GM_cookie
 // @run-at       document-end
 // @license      MIT
+// @downloadURL  https://github.com/jms830/claude-account-switcher/raw/main/claude-account-switcher.user.js
+// @updateURL    https://github.com/jms830/claude-account-switcher/raw/main/claude-account-switcher.user.js
 // ==/UserScript==
 
 (function () {
@@ -18,7 +19,6 @@
     const CONFIG = {
         storageKey: 'claude_accounts_v2',
         checkInterval: 1000,
-        sessionCookieName: 'sessionKey',
     };
 
     // Inject styles
@@ -28,31 +28,24 @@
             cursor: pointer;
         }
 
-        .account-switcher-trigger::after {
-            content: '';
+        .account-switcher-badge {
             position: absolute;
             bottom: -2px;
             right: -2px;
-            width: 12px;
-            height: 12px;
-            background-color: var(--bg-100, #f5f4ef);
+            width: 14px;
+            height: 14px;
+            background-color: var(--accent-main-200, #c96442);
             border-radius: 50%;
+            border: 2px solid var(--bg-100, #fff);
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
-        .account-switcher-trigger::before {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            right: 0;
+        .account-switcher-badge svg {
             width: 8px;
             height: 8px;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-            background-size: contain;
-            background-repeat: no-repeat;
-            z-index: 1;
+            color: white;
         }
 
         .account-switcher-menu {
@@ -128,7 +121,7 @@
         }
 
         .account-switcher-item.active {
-            background-color: var(--accent-main-100, #f0e6e4);
+            background-color: rgba(201, 100, 66, 0.1);
         }
 
         .account-switcher-item.active::before {
@@ -179,7 +172,7 @@
             text-overflow: ellipsis;
         }
 
-        .account-badge {
+        .account-type-badge {
             font-size: 10px;
             padding: 2px 6px;
             border-radius: 4px;
@@ -187,12 +180,12 @@
             text-transform: uppercase;
         }
 
-        .account-badge.work {
+        .account-type-badge.work {
             background-color: #e3f2fd;
             color: #1565c0;
         }
 
-        .account-badge.personal {
+        .account-type-badge.personal {
             background-color: #f3e5f5;
             color: #7b1fa2;
         }
@@ -229,20 +222,6 @@
             color: var(--text-300, #666);
         }
 
-        .account-switcher-current {
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border-300, #e5e5e5);
-            background-color: var(--bg-200, #f9f9f9);
-        }
-
-        .account-switcher-current-label {
-            font-size: 11px;
-            text-transform: uppercase;
-            color: var(--text-300, #666);
-            margin-bottom: 8px;
-            font-weight: 500;
-        }
-
         /* Modal styles */
         .account-modal-overlay {
             position: fixed;
@@ -269,7 +248,7 @@
             background-color: var(--bg-100, #ffffff);
             border-radius: 16px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-            width: 420px;
+            width: 440px;
             max-width: 90vw;
             max-height: 90vh;
             overflow: hidden;
@@ -319,7 +298,8 @@
         }
 
         .account-form-group input,
-        .account-form-group select {
+        .account-form-group select,
+        .account-form-group textarea {
             width: 100%;
             padding: 10px 12px;
             border: 1px solid var(--border-300, #e5e5e5);
@@ -328,10 +308,19 @@
             background-color: var(--bg-100, #ffffff);
             color: var(--text-100, #1a1a1a);
             box-sizing: border-box;
+            font-family: inherit;
+        }
+
+        .account-form-group textarea {
+            font-family: monospace;
+            font-size: 12px;
+            resize: vertical;
+            min-height: 80px;
         }
 
         .account-form-group input:focus,
-        .account-form-group select:focus {
+        .account-form-group select:focus,
+        .account-form-group textarea:focus {
             outline: none;
             border-color: var(--accent-main-200, #c96442);
             box-shadow: 0 0 0 3px rgba(201, 100, 66, 0.1);
@@ -341,6 +330,10 @@
             font-size: 12px;
             color: var(--text-300, #666);
             margin-top: 6px;
+        }
+
+        .account-form-hint a {
+            color: var(--accent-main-200, #c96442);
         }
 
         .account-modal-footer {
@@ -397,8 +390,8 @@
         }
 
         .account-color-option {
-            width: 32px;
-            height: 32px;
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
             cursor: pointer;
             border: 2px solid transparent;
@@ -413,54 +406,26 @@
             border-color: var(--text-100, #1a1a1a);
         }
 
-        .capture-session-btn {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 12px 16px;
-            background-color: #e8f5e9;
-            border: 1px dashed #4caf50;
+        .info-box {
+            background-color: #fff8e1;
+            border: 1px solid #ffcc80;
             border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            width: 100%;
-            justify-content: center;
-            color: #2e7d32;
-            font-weight: 500;
+            padding: 12px;
+            margin-bottom: 20px;
         }
 
-        .capture-session-btn:hover {
-            background-color: #c8e6c9;
+        .info-box p {
+            margin: 0;
+            color: #e65100;
+            font-size: 13px;
+            line-height: 1.5;
         }
 
-        .session-status {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 12px;
-            margin-top: 8px;
-        }
-
-        .session-status.valid {
-            color: #2e7d32;
-        }
-
-        .session-status.invalid {
-            color: #c62828;
-        }
-
-        .session-status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-        }
-
-        .session-status-dot.valid {
-            background-color: #4caf50;
-        }
-
-        .session-status-dot.invalid {
-            background-color: #f44336;
+        .info-box code {
+            background-color: rgba(0,0,0,0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
         }
     `);
 
@@ -477,7 +442,6 @@
             this.accounts = this.loadAccounts();
             this.menuVisible = false;
             this.menu = null;
-            this.currentSessionKey = this.getCurrentSessionKey();
             this.init();
         }
 
@@ -489,25 +453,8 @@
             GM_setValue(CONFIG.storageKey, this.accounts);
         }
 
-        getCurrentSessionKey() {
-            const cookies = document.cookie.split(';');
-            for (const cookie of cookies) {
-                const [name, value] = cookie.trim().split('=');
-                if (name === CONFIG.sessionCookieName) {
-                    return value;
-                }
-            }
-            return null;
-        }
-
         setSessionCookie(sessionKey) {
-            // Set the session cookie
-            document.cookie = `${CONFIG.sessionCookieName}=${sessionKey}; path=/; domain=.claude.ai; secure; samesite=lax`;
-        }
-
-        getActiveAccount() {
-            const currentKey = this.getCurrentSessionKey();
-            return this.accounts.find(a => a.sessionKey === currentKey);
+            document.cookie = `sessionKey=${sessionKey}; path=/; domain=.claude.ai; secure; samesite=lax`;
         }
 
         generateId() {
@@ -519,72 +466,67 @@
         }
 
         init() {
+            this.createMenu();
             this.waitForElement();
         }
 
         waitForElement() {
             const check = () => {
-                // Look for the user avatar/profile button in the sidebar
-                // Try multiple selectors to find the avatar
-                const avatarSelectors = [
-                    '[data-testid="user-menu-button"]',
-                    'button[aria-label*="Account"]',
-                    'button[aria-label*="Profile"]',
-                    // The avatar div from your HTML sample
-                    '.flex.items-center.justify-center.rounded-full.text-text-200',
-                    // Look for the initials avatar
-                    '.rounded-full.font-bold.select-none.bg-text-200'
-                ];
-
-                let avatarElement = null;
-                for (const selector of avatarSelectors) {
-                    avatarElement = document.querySelector(selector);
-                    if (avatarElement) break;
-                }
-
-                if (avatarElement && !avatarElement.dataset.accountSwitcher) {
-                    this.attachToAvatar(avatarElement);
+                // Target the user menu button specifically
+                const userMenuButton = document.querySelector('[data-testid="user-menu-button"]');
+                
+                if (userMenuButton && !userMenuButton.dataset.accountSwitcherAttached) {
+                    this.attachToAvatar(userMenuButton);
                 }
             };
 
+            // Run immediately
             check();
+            
+            // Also run after a short delay to catch late-loading elements
+            setTimeout(check, 500);
+            setTimeout(check, 1500);
+            setTimeout(check, 3000);
+            
+            // Keep checking periodically
             setInterval(check, CONFIG.checkInterval);
 
+            // Watch for DOM changes
             const observer = new MutationObserver(check);
             observer.observe(document.body, { childList: true, subtree: true });
         }
 
-        attachToAvatar(avatarElement) {
-            // Find the clickable parent
-            let targetElement = avatarElement.closest('button') || 
-                               avatarElement.closest('[role="button"]') || 
-                               avatarElement.closest('a') ||
-                               avatarElement;
+        attachToAvatar(button) {
+            // Mark as attached using both old and new attribute names for compatibility
+            button.dataset.accountSwitcherAttached = 'true';
+            button.dataset.accountSwitcher = 'true';
+            button.classList.add('account-switcher-trigger');
 
-            if (targetElement.dataset.accountSwitcher) return;
-            targetElement.dataset.accountSwitcher = 'true';
+            console.log('[Account Switcher] Attached to button:', button);
 
-            // Add visual indicator
-            targetElement.classList.add('account-switcher-trigger');
+            // Add visual badge if not already present
+            if (!button.querySelector('.account-switcher-badge')) {
+                const badge = document.createElement('div');
+                badge.className = 'account-switcher-badge';
+                badge.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>`;
+                button.style.position = 'relative';
+                button.appendChild(badge);
+            }
 
-            // Create click handler
-            targetElement.addEventListener('click', (e) => {
+            // Intercept clicks - use capture phase to intercept before other handlers
+            button.addEventListener('click', (e) => {
+                console.log('[Account Switcher] Click intercepted');
                 e.preventDefault();
                 e.stopPropagation();
-                this.toggleMenu(targetElement);
+                e.stopImmediatePropagation();
+                this.toggleMenu(button);
+                return false;
             }, true);
-
-            this.createMenu();
         }
 
         createMenu() {
-            if (this.menu) {
-                this.menu.remove();
-            }
-
             this.menu = document.createElement('div');
             this.menu.className = 'account-switcher-menu';
-            this.updateMenuContent();
             document.body.appendChild(this.menu);
 
             document.addEventListener('click', (e) => {
@@ -601,12 +543,11 @@
         }
 
         updateMenuContent() {
-            const activeAccount = this.getActiveAccount();
-            const otherAccounts = this.accounts.filter(a => a.sessionKey !== this.getCurrentSessionKey());
+            const hasAccounts = this.accounts.length > 0;
 
             this.menu.innerHTML = `
                 <div class="account-switcher-header">
-                    <h3>Accounts</h3>
+                    <h3>Switch Account</h3>
                     <button class="account-switcher-close">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M18 6L6 18M6 6l12 12"/>
@@ -614,76 +555,49 @@
                     </button>
                 </div>
                 
-                ${activeAccount ? `
-                    <div class="account-switcher-current">
-                        <div class="account-switcher-current-label">Signed in as</div>
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <div class="account-avatar" style="background-color: ${activeAccount.color}">
-                                ${this.getInitials(activeAccount.name)}
+                <div class="account-switcher-list">
+                    ${!hasAccounts ? `
+                        <div style="padding: 24px 16px; text-align: center; color: var(--text-300, #666);">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 12px; opacity: 0.5;">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                <circle cx="9" cy="7" r="4"/>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                            <p style="margin: 0 0 8px 0; font-weight: 500;">No accounts saved</p>
+                            <p style="margin: 0; font-size: 13px;">Add your accounts to switch between them instantly</p>
+                        </div>
+                    ` : this.accounts.map((account, index) => `
+                        <div class="account-switcher-item" data-account-index="${index}">
+                            <div class="account-avatar" style="background-color: ${account.color}">
+                                ${this.getInitials(account.name)}
                             </div>
                             <div class="account-info">
-                                <div class="account-name">${activeAccount.name}</div>
-                                <div class="account-email">${activeAccount.email}</div>
+                                <div class="account-name">${account.name}</div>
+                                <div class="account-email">${account.email || 'No email'}</div>
                             </div>
-                            <span class="account-badge ${activeAccount.type}">${activeAccount.type}</span>
+                            <span class="account-type-badge ${account.type}">${account.type}</span>
                         </div>
-                    </div>
-                ` : ''}
-
-                <div class="account-switcher-list">
-                    ${otherAccounts.length === 0 && !activeAccount ? `
-                        <div style="padding: 24px 16px; text-align: center; color: var(--text-300, #666);">
-                            <p style="margin: 0 0 8px 0; font-weight: 500;">No accounts saved</p>
-                            <p style="margin: 0; font-size: 13px;">Save your current session to enable quick switching</p>
-                        </div>
-                    ` : otherAccounts.length === 0 ? `
-                        <div style="padding: 16px; text-align: center; color: var(--text-300, #666); font-size: 13px;">
-                            No other accounts. Add another to switch between them.
-                        </div>
-                    ` : `
-                        <div style="padding: 8px 16px 4px; font-size: 11px; text-transform: uppercase; color: var(--text-300, #666); font-weight: 500;">
-                            Switch to
-                        </div>
-                        ${otherAccounts.map(account => `
-                            <div class="account-switcher-item" data-account-id="${account.id}">
-                                <div class="account-avatar" style="background-color: ${account.color}">
-                                    ${this.getInitials(account.name)}
-                                </div>
-                                <div class="account-info">
-                                    <div class="account-name">${account.name}</div>
-                                    <div class="account-email">${account.email}</div>
-                                </div>
-                                <span class="account-badge ${account.type}">${account.type}</span>
-                            </div>
-                        `).join('')}
-                    `}
+                    `).join('')}
                 </div>
 
                 <div class="account-switcher-footer">
-                    ${!activeAccount && this.getCurrentSessionKey() ? `
-                        <div class="account-switcher-action" data-action="save-current">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                                <polyline points="17 21 17 13 7 13 7 21"/>
-                                <polyline points="7 3 7 8 15 8"/>
-                            </svg>
-                            Save current session
-                        </div>
-                    ` : ''}
                     <div class="account-switcher-action" data-action="add">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"/>
                             <path d="M12 8v8M8 12h8"/>
                         </svg>
-                        Add another account
+                        Add account
                     </div>
-                    <div class="account-switcher-action" data-action="manage">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="3"/>
-                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                        </svg>
-                        Manage accounts
-                    </div>
+                    ${hasAccounts ? `
+                        <div class="account-switcher-action" data-action="manage">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"/>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                            </svg>
+                            Manage accounts
+                        </div>
+                    ` : ''}
                 </div>
             `;
 
@@ -692,25 +606,17 @@
 
             this.menu.querySelectorAll('.account-switcher-item').forEach(item => {
                 item.addEventListener('click', () => {
-                    const accountId = item.dataset.accountId;
-                    this.switchToAccount(accountId);
+                    const index = parseInt(item.dataset.accountIndex);
+                    this.switchToAccount(index);
                 });
             });
 
-            const saveCurrentBtn = this.menu.querySelector('[data-action="save-current"]');
-            if (saveCurrentBtn) {
-                saveCurrentBtn.addEventListener('click', () => {
-                    this.hideMenu();
-                    this.showSaveCurrentSessionModal();
-                });
-            }
-
-            this.menu.querySelector('[data-action="add"]').addEventListener('click', () => {
+            this.menu.querySelector('[data-action="add"]')?.addEventListener('click', () => {
                 this.hideMenu();
                 this.showAddAccountModal();
             });
 
-            this.menu.querySelector('[data-action="manage"]').addEventListener('click', () => {
+            this.menu.querySelector('[data-action="manage"]')?.addEventListener('click', () => {
                 this.hideMenu();
                 this.showManageAccountsModal();
             });
@@ -734,14 +640,11 @@
             if (left + menuWidth > window.innerWidth) {
                 left = window.innerWidth - menuWidth - 16;
             }
-            if (left < 16) {
-                left = 16;
-            }
+            if (left < 16) left = 16;
 
             this.menu.style.left = `${left}px`;
             this.menu.style.top = `${top}px`;
 
-            this.currentSessionKey = this.getCurrentSessionKey();
             this.updateMenuContent();
             this.menu.classList.add('visible');
             this.menuVisible = true;
@@ -752,132 +655,20 @@
             this.menuVisible = false;
         }
 
-        switchToAccount(accountId) {
-            const account = this.accounts.find(a => a.id === accountId);
-            if (!account) return;
+        switchToAccount(index) {
+            const account = this.accounts[index];
+            if (!account || !account.sessionKey) {
+                alert('No session key for this account');
+                return;
+            }
 
             this.hideMenu();
-
-            // Set the session cookie and reload
             this.setSessionCookie(account.sessionKey);
             window.location.reload();
         }
 
-        showSaveCurrentSessionModal() {
-            const currentKey = this.getCurrentSessionKey();
-            if (!currentKey) {
-                alert('No active session found');
-                return;
-            }
-
-            const overlay = document.createElement('div');
-            overlay.className = 'account-modal-overlay';
-
-            const selectedColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
-
-            overlay.innerHTML = `
-                <div class="account-modal">
-                    <div class="account-modal-header">
-                        <h2>Save Current Session</h2>
-                    </div>
-                    <div class="account-modal-body">
-                        <p style="margin: 0 0 20px 0; color: var(--text-200, #333); font-size: 14px;">
-                            Save your current Claude session to quickly switch back to it later.
-                        </p>
-                        <div class="account-form-group">
-                            <label>Display Name</label>
-                            <input type="text" id="account-name" placeholder="e.g., Work Account">
-                        </div>
-                        <div class="account-form-group">
-                            <label>Email Address</label>
-                            <input type="email" id="account-email" placeholder="e.g., john@company.com">
-                            <div class="account-form-hint">The Google email for this account (for your reference)</div>
-                        </div>
-                        <div class="account-form-group">
-                            <label>Account Type</label>
-                            <select id="account-type">
-                                <option value="work">Work</option>
-                                <option value="personal">Personal</option>
-                            </select>
-                        </div>
-                        <div class="account-form-group">
-                            <label>Avatar Color</label>
-                            <div class="account-color-picker">
-                                ${AVATAR_COLORS.map(color => `
-                                    <div class="account-color-option ${color === selectedColor ? 'selected' : ''}" 
-                                         data-color="${color}" 
-                                         style="background-color: ${color}">
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="account-modal-footer">
-                        <button class="account-btn account-btn-secondary" data-action="cancel">Cancel</button>
-                        <button class="account-btn account-btn-primary" data-action="save">Save Session</button>
-                    </div>
-                </div>
-            `;
-
-            document.body.appendChild(overlay);
-            requestAnimationFrame(() => overlay.classList.add('visible'));
-
-            let currentColor = selectedColor;
-
-            overlay.querySelectorAll('.account-color-option').forEach(option => {
-                option.addEventListener('click', () => {
-                    overlay.querySelectorAll('.account-color-option').forEach(o => o.classList.remove('selected'));
-                    option.classList.add('selected');
-                    currentColor = option.dataset.color;
-                });
-            });
-
-            const closeModal = () => {
-                overlay.classList.remove('visible');
-                setTimeout(() => overlay.remove(), 200);
-            };
-
-            overlay.querySelector('[data-action="cancel"]').addEventListener('click', closeModal);
-
-            overlay.querySelector('[data-action="save"]').addEventListener('click', () => {
-                const name = overlay.querySelector('#account-name').value.trim();
-                const email = overlay.querySelector('#account-email').value.trim();
-                const type = overlay.querySelector('#account-type').value;
-
-                if (!name) {
-                    alert('Please enter a display name');
-                    return;
-                }
-
-                // Check if this session is already saved
-                const existing = this.accounts.find(a => a.sessionKey === currentKey);
-                if (existing) {
-                    alert('This session is already saved as "' + existing.name + '"');
-                    return;
-                }
-
-                this.accounts.push({
-                    id: this.generateId(),
-                    name,
-                    email: email || 'No email provided',
-                    type,
-                    color: currentColor,
-                    sessionKey: currentKey,
-                    savedAt: new Date().toISOString()
-                });
-
-                this.saveAccounts();
-                closeModal();
-                this.updateMenuContent();
-            });
-
-            overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) closeModal();
-            });
-        }
-
-        showAddAccountModal(editAccount = null) {
-            const isEdit = !!editAccount;
+        showAddAccountModal(editAccount = null, editIndex = null) {
+            const isEdit = editAccount !== null;
             const overlay = document.createElement('div');
             overlay.className = 'account-modal-overlay';
 
@@ -890,21 +681,27 @@
                     </div>
                     <div class="account-modal-body">
                         ${!isEdit ? `
-                            <div style="background-color: #fff3e0; border: 1px solid #ffcc80; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
-                                <p style="margin: 0; color: #e65100; font-size: 13px;">
-                                    <strong>Tip:</strong> To add a new account, first log into Claude with that account, 
-                                    then use "Save current session" from the menu.
+                            <div class="info-box">
+                                <p>
+                                    <strong>How to get your session key:</strong><br>
+                                    1. Open DevTools (F12) → Application tab<br>
+                                    2. Under Cookies → claude.ai, find <code>sessionKey</code><br>
+                                    3. Copy the value (starts with <code>sk-ant-</code>)
                                 </p>
                             </div>
                         ` : ''}
+                        
                         <div class="account-form-group">
-                            <label>Display Name</label>
+                            <label>Display Name *</label>
                             <input type="text" id="account-name" placeholder="e.g., Work Account" value="${editAccount?.name || ''}">
                         </div>
+                        
                         <div class="account-form-group">
-                            <label>Email Address</label>
+                            <label>Email (optional)</label>
                             <input type="email" id="account-email" placeholder="e.g., john@company.com" value="${editAccount?.email || ''}">
+                            <div class="account-form-hint">Just for your reference to identify the account</div>
                         </div>
+                        
                         <div class="account-form-group">
                             <label>Account Type</label>
                             <select id="account-type">
@@ -912,6 +709,16 @@
                                 <option value="personal" ${editAccount?.type === 'personal' ? 'selected' : ''}>Personal</option>
                             </select>
                         </div>
+                        
+                        <div class="account-form-group">
+                            <label>Session Key *</label>
+                            <textarea id="account-session" placeholder="sk-ant-sid01-..." ${isEdit ? 'readonly style="opacity: 0.7; cursor: not-allowed;"' : ''}>${editAccount?.sessionKey || ''}</textarea>
+                            ${isEdit ? 
+                                '<div class="account-form-hint">Session keys cannot be edited. Delete and re-add to change.</div>' :
+                                '<div class="account-form-hint">Get this from DevTools → Application → Cookies → sessionKey</div>'
+                            }
+                        </div>
+                        
                         <div class="account-form-group">
                             <label>Avatar Color</label>
                             <div class="account-color-picker">
@@ -923,21 +730,6 @@
                                 `).join('')}
                             </div>
                         </div>
-                        ${isEdit ? `
-                            <div class="account-form-group">
-                                <label>Session Key</label>
-                                <input type="text" id="account-session" value="${editAccount?.sessionKey || ''}" 
-                                       style="font-family: monospace; font-size: 12px;" readonly>
-                                <div class="account-form-hint">Session keys cannot be edited for security</div>
-                            </div>
-                        ` : `
-                            <div class="account-form-group">
-                                <label>Session Key (Advanced)</label>
-                                <input type="text" id="account-session" placeholder="sk-ant-sid01-..." 
-                                       style="font-family: monospace; font-size: 12px;">
-                                <div class="account-form-hint">Optional: Paste a session key directly if you have one</div>
-                            </div>
-                        `}
                     </div>
                     <div class="account-modal-footer">
                         ${isEdit ? `<button class="account-btn account-btn-danger" data-action="delete" style="margin-right: auto;">Delete</button>` : ''}
@@ -952,6 +744,7 @@
 
             let currentColor = selectedColor;
 
+            // Color picker
             overlay.querySelectorAll('.account-color-option').forEach(option => {
                 option.addEventListener('click', () => {
                     overlay.querySelectorAll('.account-color-option').forEach(o => o.classList.remove('selected'));
@@ -971,60 +764,53 @@
                 const name = overlay.querySelector('#account-name').value.trim();
                 const email = overlay.querySelector('#account-email').value.trim();
                 const type = overlay.querySelector('#account-type').value;
-                const sessionInput = overlay.querySelector('#account-session');
-                const sessionKey = sessionInput ? sessionInput.value.trim() : '';
+                const sessionKey = overlay.querySelector('#account-session').value.trim();
 
                 if (!name) {
                     alert('Please enter a display name');
                     return;
                 }
 
+                if (!isEdit && !sessionKey) {
+                    alert('Please enter a session key');
+                    return;
+                }
+
+                if (!isEdit && !sessionKey.startsWith('sk-ant-')) {
+                    alert('Invalid session key format. It should start with "sk-ant-"');
+                    return;
+                }
+
                 if (isEdit) {
-                    const index = this.accounts.findIndex(a => a.id === editAccount.id);
-                    if (index !== -1) {
-                        this.accounts[index] = {
-                            ...editAccount,
-                            name,
-                            email: email || 'No email provided',
-                            type,
-                            color: currentColor
-                        };
-                    }
+                    this.accounts[editIndex] = {
+                        ...editAccount,
+                        name,
+                        email,
+                        type,
+                        color: currentColor
+                    };
                 } else {
-                    if (!sessionKey) {
-                        alert('Please enter a session key, or use "Save current session" while logged into the account');
-                        return;
-                    }
-
-                    // Validate session key format
-                    if (!sessionKey.startsWith('sk-ant-')) {
-                        alert('Invalid session key format. Session keys should start with "sk-ant-"');
-                        return;
-                    }
-
                     this.accounts.push({
                         id: this.generateId(),
                         name,
-                        email: email || 'No email provided',
+                        email,
                         type,
                         color: currentColor,
                         sessionKey,
-                        savedAt: new Date().toISOString()
+                        createdAt: new Date().toISOString()
                     });
                 }
 
                 this.saveAccounts();
                 closeModal();
-                this.updateMenuContent();
             });
 
             if (isEdit) {
                 overlay.querySelector('[data-action="delete"]').addEventListener('click', () => {
-                    if (confirm(`Are you sure you want to remove "${editAccount.name}"?`)) {
-                        this.accounts = this.accounts.filter(a => a.id !== editAccount.id);
+                    if (confirm(`Delete "${editAccount.name}"? This cannot be undone.`)) {
+                        this.accounts.splice(editIndex, 1);
                         this.saveAccounts();
                         closeModal();
-                        this.updateMenuContent();
                     }
                 });
             }
@@ -1046,28 +832,21 @@
                     <div class="account-modal-body" style="padding: 0;">
                         ${this.accounts.length === 0 ? `
                             <div style="padding: 32px; text-align: center; color: var(--text-300, #666);">
-                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 16px; opacity: 0.5;">
-                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                                    <circle cx="9" cy="7" r="4"/>
-                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                                </svg>
-                                <p style="margin: 0 0 8px 0; font-weight: 500;">No accounts saved</p>
-                                <p style="margin: 0; font-size: 13px;">Log into Claude and save your session to get started</p>
+                                <p style="margin: 0;">No accounts saved yet</p>
                             </div>
                         ` : `
                             <div style="max-height: 400px; overflow-y: auto;">
-                                ${this.accounts.map(account => `
-                                    <div class="account-switcher-item" data-account-id="${account.id}" style="cursor: pointer;">
+                                ${this.accounts.map((account, index) => `
+                                    <div class="account-switcher-item" data-account-index="${index}" style="cursor: pointer;">
                                         <div class="account-avatar" style="background-color: ${account.color}">
                                             ${this.getInitials(account.name)}
                                         </div>
                                         <div class="account-info">
                                             <div class="account-name">${account.name}</div>
-                                            <div class="account-email">${account.email}</div>
+                                            <div class="account-email">${account.email || 'No email'}</div>
                                         </div>
-                                        <span class="account-badge ${account.type}">${account.type}</span>
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-300, #666);">
+                                        <span class="account-type-badge ${account.type}">${account.type}</span>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-300, #666); flex-shrink: 0;">
                                             <polyline points="9 18 15 12 9 6"/>
                                         </svg>
                                     </div>
@@ -1077,6 +856,7 @@
                     </div>
                     <div class="account-modal-footer">
                         <button class="account-btn account-btn-secondary" data-action="close">Close</button>
+                        <button class="account-btn account-btn-primary" data-action="add">Add Account</button>
                     </div>
                 </div>
             `;
@@ -1090,15 +870,18 @@
             };
 
             overlay.querySelector('[data-action="close"]').addEventListener('click', closeModal);
+            
+            overlay.querySelector('[data-action="add"]').addEventListener('click', () => {
+                closeModal();
+                setTimeout(() => this.showAddAccountModal(), 250);
+            });
 
             overlay.querySelectorAll('.account-switcher-item').forEach(item => {
                 item.addEventListener('click', () => {
-                    const accountId = item.dataset.accountId;
-                    const account = this.accounts.find(a => a.id === accountId);
-                    if (account) {
-                        closeModal();
-                        setTimeout(() => this.showAddAccountModal(account), 250);
-                    }
+                    const index = parseInt(item.dataset.accountIndex);
+                    const account = this.accounts[index];
+                    closeModal();
+                    setTimeout(() => this.showAddAccountModal(account, index), 250);
                 });
             });
 
@@ -1109,9 +892,15 @@
     }
 
     // Initialize
+    console.log('[Account Switcher] Script loaded, version 1.2.1');
+    
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => new AccountSwitcher());
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('[Account Switcher] DOM ready, initializing...');
+            new AccountSwitcher();
+        });
     } else {
+        console.log('[Account Switcher] DOM already ready, initializing...');
         new AccountSwitcher();
     }
 })();
