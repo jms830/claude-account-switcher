@@ -1,0 +1,79 @@
+# =============================================================================
+# SECURITY - Session Keys & Credentials
+# =============================================================================
+# NEVER commit session keys, tokens, or credentials
+*.session
+*.key
+*.token
+session_keys.txt
+session_keys.json
+credentials*
+secrets*
+*.secret
+.env
+.env.*
+!.env.example
+
+# Exported account data (may contain session keys)
+claude_tokens*.json
+accounts_backup*.json
+*_export.json
+*_backup.json
+
+# =============================================================================
+# OS Generated Files
+# =============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# =============================================================================
+# Editor & IDE
+# =============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+*.sublime-project
+
+# =============================================================================
+# Node.js (if adding build tools later)
+# =============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+.npm
+.pnpm-store/
+
+# =============================================================================
+# Logs
+# =============================================================================
+logs/
+*.log
+
+# =============================================================================
+# Temporary files
+# =============================================================================
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+
+# =============================================================================
+# Test/Dev files that might contain real data
+# =============================================================================
+test_data/
+dev_data/
+*.test.json
+*.dev.json
