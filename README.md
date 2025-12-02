@@ -18,13 +18,9 @@ A userscript that adds Gmail-style **instant** account switching to Claude.ai. S
    - [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Firefox, Safari, Edge)
    - [Violentmonkey](https://violentmonkey.github.io/) (Chrome, Firefox)
 
-2. Click on your userscript manager icon and select "Create new script"
+2. **[Click here to install the script](https://github.com/jms830/claude-account-switcher/raw/main/claude-account-switcher.user.js)** - Tampermonkey will automatically prompt you to install it
 
-3. Copy the contents of `claude-account-switcher.user.js` and paste it into the editor
-
-4. Save the script (Ctrl+S or Cmd+S)
-
-5. Navigate to [claude.ai](https://claude.ai) - you'll see a small dropdown indicator on your avatar
+3. Navigate to [claude.ai](https://claude.ai) - you'll see a small dropdown indicator on your avatar
 
 ## Usage
 
