@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Claude Account Switcher
 // @namespace    https://github.com/jms830
-// @version      1.3.0
+// @version      1.3.1
 // @description  Gmail-style account switcher for Claude.ai - adds "Switch Account" to user menu
 // @match        https://claude.ai/*
 // @grant        GM_setValue
@@ -448,7 +448,7 @@
         }
 
         init() {
-            console.log('[Account Switcher] Initialized v1.3.0');
+            console.log('[Account Switcher] Initialized v1.3.1');
             this.createSubmenu();
             this.watchForMenu();
         }
@@ -533,15 +533,34 @@
             const rect = anchorElement.getBoundingClientRect();
             const menuRect = anchorElement.closest('[role="menu"]')?.getBoundingClientRect();
             
+            // Calculate position - try to show to the left of the menu
+            let left, top;
+            const submenuWidth = 290;
+            
             if (menuRect) {
-                this.submenu.style.top = `${rect.top}px`;
-                this.submenu.style.left = `${menuRect.left - 290}px`;
+                top = rect.top;
+                left = menuRect.left - submenuWidth - 4;
+                
+                // If would go off-screen left, show to the right instead
+                if (left < 10) {
+                    left = menuRect.right + 4;
+                }
             } else {
-                this.submenu.style.top = `${rect.top}px`;
-                this.submenu.style.left = `${rect.left - 290}px`;
+                top = rect.top;
+                left = rect.left - submenuWidth - 4;
             }
+            
+            // Ensure doesn't go off bottom of screen
+            const submenuHeight = 300; // approximate
+            if (top + submenuHeight > window.innerHeight) {
+                top = window.innerHeight - submenuHeight - 10;
+            }
+            
+            this.submenu.style.top = `${Math.max(10, top)}px`;
+            this.submenu.style.left = `${Math.max(10, left)}px`;
 
             this.submenu.classList.add('visible');
+            console.log('[Account Switcher] Submenu shown at', { top, left });
         }
 
         hideSubmenu() {
@@ -606,7 +625,19 @@
             // Insert before the first separator
             firstSeparator.parentNode.insertBefore(switchItem, firstSeparator);
 
-            // Add hover behavior
+            // Click to show submenu (more reliable than hover on some systems)
+            switchItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (this.submenu.classList.contains('visible')) {
+                    this.hideSubmenu();
+                } else {
+                    this.showSubmenu(switchItem);
+                }
+            });
+
+            // Also support hover
             let hoverTimeout;
             switchItem.addEventListener('mouseenter', () => {
                 clearTimeout(hoverTimeout);
@@ -619,7 +650,7 @@
                 if (toElement && this.submenu.contains(toElement)) {
                     return;
                 }
-                hoverTimeout = setTimeout(() => this.hideSubmenu(), 100);
+                hoverTimeout = setTimeout(() => this.hideSubmenu(), 150);
             });
 
             this.submenu.addEventListener('mouseenter', () => {
@@ -627,7 +658,7 @@
             });
 
             this.submenu.addEventListener('mouseleave', () => {
-                hoverTimeout = setTimeout(() => this.hideSubmenu(), 100);
+                hoverTimeout = setTimeout(() => this.hideSubmenu(), 150);
             });
 
             // Hide submenu when menu closes
