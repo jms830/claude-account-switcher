@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         Claude Account Switcher
 // @namespace    https://github.com/jms830
-// @version      2.0.1
+// @version      2.0.2
 // @description  Gmail-style account switcher for Claude.ai - standalone floating button
 // @match        https://claude.ai/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle
-// @run-at       document-end
+// @grant        unsafeWindow
+// @run-at       document-idle
+// @inject-into  content
 // @license      MIT
 // @downloadURL  https://github.com/jms830/claude-account-switcher/raw/main/claude-account-switcher.user.js
 // @updateURL    https://github.com/jms830/claude-account-switcher/raw/main/claude-account-switcher.user.js
@@ -423,10 +425,14 @@
         }
     `);
 
+    // Get the real document (not sandboxed)
+    const realDocument = (typeof unsafeWindow !== 'undefined') ? unsafeWindow.document : document;
+
     class AccountSwitcher {
         constructor() {
             this.accounts = this.loadAccounts();
             this.panelVisible = false;
+            this.doc = realDocument;
             this.init();
         }
 
@@ -439,14 +445,14 @@
         }
 
         init() {
-            console.log('[Account Switcher] v2.0.1 - Standalone mode');
+            console.log('[Account Switcher] v2.0.2 - Standalone mode');
             this.createUI();
             this.bindKeyboard();
         }
 
         createUI() {
             // Floating trigger button
-            this.trigger = document.createElement('button');
+            this.trigger = this.doc.createElement('button');
             this.trigger.type = 'button';
             this.trigger.id = 'cas-trigger';
             this.trigger.title = 'Switch Account (Alt+S)';
@@ -477,11 +483,11 @@
                 ${this.accounts.length > 0 ? `<span class="cas-badge">${this.accounts.length}</span>` : ''}
             `;
             this.trigger.addEventListener('click', () => this.togglePanel());
-            document.body.appendChild(this.trigger);
+            this.doc.body.appendChild(this.trigger);
             console.log('[Account Switcher] Trigger button injected', this.trigger);
 
             // Panel
-            this.panel = document.createElement('div');
+            this.panel = this.doc.createElement('div');
             this.panel.id = 'cas-panel';
             this.panel.style.cssText = `
                 position: fixed !important;
@@ -491,11 +497,11 @@
                 z-index: 2147483001;
                 display: none;
             `;
-            document.body.appendChild(this.panel);
-            console.log('[Account Switcher] Panel container injected', this.panel);
+            this.doc.body.appendChild(this.panel);
+            console.log('[Account Switcher] Panel container injected', this.trigger, this.panel);
 
             // Close panel when clicking outside
-            document.addEventListener('click', (e) => {
+            this.doc.addEventListener('click', (e) => {
                 if (this.panelVisible && 
                     !this.panel.contains(e.target) && 
                     !this.trigger.contains(e.target)) {
@@ -594,7 +600,7 @@
         }
 
         bindKeyboard() {
-            document.addEventListener('keydown', (e) => {
+            this.doc.addEventListener('keydown', (e) => {
                 // Alt+S to toggle panel
                 if (e.altKey && e.key.toLowerCase() === 's') {
                     e.preventDefault();
@@ -627,7 +633,7 @@
             const account = isEdit ? this.accounts[editIndex] : null;
             const selectedColor = account?.color || COLORS[Math.floor(Math.random() * COLORS.length)];
 
-            const overlay = document.createElement('div');
+            const overlay = this.doc.createElement('div');
             overlay.className = 'cas-modal-overlay';
             overlay.innerHTML = `
                 <div class="cas-modal">
@@ -682,7 +688,7 @@
                 </div>
             `;
 
-            document.body.appendChild(overlay);
+            this.doc.body.appendChild(overlay);
             requestAnimationFrame(() => overlay.classList.add('visible'));
 
             let color = selectedColor;
@@ -765,10 +771,21 @@
         }
     }
 
-    // Initialize when ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => new AccountSwitcher());
-    } else {
+    // Initialize when ready - use unsafeWindow.document to access main page
+    const doc = (typeof unsafeWindow !== 'undefined') ? unsafeWindow.document : document;
+    const targetBody = doc.body;
+    
+    if (targetBody) {
+        console.log('[Account Switcher] Body found, initializing...');
         new AccountSwitcher();
+    } else {
+        console.log('[Account Switcher] Waiting for body...');
+        const observer = new MutationObserver(() => {
+            if (doc.body) {
+                observer.disconnect();
+                new AccountSwitcher();
+            }
+        });
+        observer.observe(doc.documentElement, { childList: true });
     }
 })();
