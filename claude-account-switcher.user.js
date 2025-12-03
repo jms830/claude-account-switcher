@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Claude Account Switcher
 // @namespace    https://github.com/jms830
-// @version      2.1.1
+// @version      2.1.2
 // @description  Gmail-style account switcher for Claude.ai
 // @match        https://claude.ai/*
 // @grant        GM_setValue
@@ -263,8 +263,12 @@
     let popup = null;
     let modalBg = null;
 
-    // Create popup
+    // Create popup - inject into page DOM
     function createPopup() {
+        // Remove old one if exists
+        const old = document.getElementById('cas-popup');
+        if (old) old.remove();
+
         popup = document.createElement('div');
         popup.id = 'cas-popup';
         popup.innerHTML = `
@@ -276,6 +280,7 @@
             <button id="cas-add-btn">+ Add Account</button>
         `;
         document.body.appendChild(popup);
+        console.log('[CAS] Popup created:', popup);
 
         popup.querySelector('#cas-popup-close').onclick = () => popup.classList.remove('open');
         popup.querySelector('#cas-add-btn').onclick = () => openModal();
@@ -459,7 +464,7 @@
 
     // Initialize
     function init() {
-        console.log('[CAS] v2.1.1 initializing...');
+        console.log('[CAS] v2.1.2 initializing...');
         createPopup();
         createModal();
 
