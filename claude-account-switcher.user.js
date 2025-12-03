@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Claude Account Switcher
 // @namespace    https://github.com/jms830
-// @version      2.1.2
+// @version      2.1.3
 // @description  Gmail-style account switcher for Claude.ai
 // @match        https://claude.ai/*
 // @grant        GM_setValue
@@ -464,7 +464,7 @@
 
     // Initialize
     function init() {
-        console.log('[CAS] v2.1.2 initializing...');
+        console.log('[CAS] v2.1.3 initializing...');
         createPopup();
         createModal();
 
@@ -482,6 +482,12 @@
 
         // Also watch for DOM changes (SPA navigation)
         const observer = new MutationObserver(() => {
+            if (!document.getElementById('cas-popup')) {
+                createPopup();
+            }
+            if (!document.getElementById('cas-modal-bg')) {
+                createModal();
+            }
             if (!document.getElementById('cas-btn')) {
                 injectButton();
             }
