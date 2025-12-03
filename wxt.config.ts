@@ -9,6 +9,18 @@ export default defineConfig({
     action: {
       default_popup: 'popup.html',
       default_title: 'Claude Account Switcher',
+      default_icon: {
+        16: 'assets/icon-16.png',
+        32: 'assets/icon-32.png',
+        48: 'assets/icon-48.png',
+        128: 'assets/icon-128.png',
+      },
+    },
+    icons: {
+      16: 'assets/icon-16.png',
+      32: 'assets/icon-32.png',
+      48: 'assets/icon-48.png',
+      128: 'assets/icon-128.png',
     },
   },
 });
