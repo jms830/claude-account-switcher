@@ -21,11 +21,30 @@ export default defineBackground(() => {
 async function setSessionCookie(sessionKey: string): Promise<void> {
   console.log('[CAS] Setting session cookie...');
   
+  // Get existing cookie to preserve its expiration if possible
+  const existingCookie = await chrome.cookies.get({
+    url: 'https://claude.ai',
+    name: 'sessionKey'
+  });
+  
   // Remove existing sessionKey cookie first
   await chrome.cookies.remove({
     url: 'https://claude.ai',
     name: 'sessionKey'
   });
+  
+  // Also try removing from api.claude.ai
+  try {
+    await chrome.cookies.remove({
+      url: 'https://api.claude.ai',
+      name: 'sessionKey'
+    });
+  } catch (e) {
+    // Ignore if doesn't exist
+  }
+  
+  // Set expiration to 1 year from now (Claude's typical session length)
+  const oneYearFromNow = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60);
   
   // Set the new sessionKey cookie
   await chrome.cookies.set({
@@ -36,7 +55,8 @@ async function setSessionCookie(sessionKey: string): Promise<void> {
     path: '/',
     secure: true,
     httpOnly: true,
-    sameSite: 'lax'
+    sameSite: 'lax',
+    expirationDate: existingCookie?.expirationDate || oneYearFromNow
   });
   
   console.log('[CAS] Session cookie set successfully');

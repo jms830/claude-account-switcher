@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         Claude Account Switcher
 // @namespace    https://github.com/jms830
-// @version      3.0.0
+// @version      3.0.2
 // @description  Gmail-style account switcher for Claude.ai with auto-detection
 // @match        https://claude.ai/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
+// @grant        GM_cookie
 // @connect      api.claude.ai
 // @run-at       document-end
 // @license      MIT
@@ -595,8 +596,26 @@
             alert('No session key. Shift+click to edit.');
             return;
         }
-        document.cookie = `sessionKey=${acc.sessionKey}; path=/; domain=.claude.ai; secure; samesite=lax`;
-        location.reload();
+        
+        // Use GM_cookie if available (Tampermonkey 4.14+), otherwise fall back to document.cookie
+        if (typeof GM_cookie !== 'undefined' && GM_cookie.set) {
+            GM_cookie.set({
+                name: 'sessionKey',
+                value: acc.sessionKey,
+                domain: '.claude.ai',
+                path: '/',
+                secure: true,
+                httpOnly: true
+            }, () => {
+                console.log('[CAS] Cookie set via GM_cookie, reloading...');
+                window.location.reload();
+            });
+        } else {
+            // Fallback: try document.cookie (won't work for HttpOnly cookies)
+            document.cookie = `sessionKey=${acc.sessionKey}; path=/; domain=.claude.ai; secure`;
+            console.log('[CAS] Cookie set via document.cookie, reloading...');
+            window.location.reload();
+        }
     }
 
     // Modal

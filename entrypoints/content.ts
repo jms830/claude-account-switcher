@@ -15,11 +15,23 @@ const SIDEBAR_COLLAPSED_WIDTH = 16;
 
 interface Settings {
   showOnSite: boolean;
+  keyboardShortcut: boolean;
+  autoSave: boolean;
+  confirmSwitch: boolean;
 }
+
+const DEFAULT_SETTINGS: Settings = {
+  showOnSite: true,
+  keyboardShortcut: true,
+  autoSave: true,
+  confirmSwitch: false
+};
+
+let settings: Settings = { ...DEFAULT_SETTINGS };
 
 async function loadSettings(): Promise<Settings> {
   const result = await chrome.storage.local.get(SETTINGS_KEY);
-  return result[SETTINGS_KEY] || { showOnSite: true };
+  return { ...DEFAULT_SETTINGS, ...result[SETTINGS_KEY] };
 }
 
 interface Account {
@@ -62,6 +74,31 @@ async function getCurrentSessionKey(): Promise<string | null> {
   return response?.success ? response.sessionKey : null;
 }
 
+// Try to get email from DOM with multiple selectors
+function getEmailFromDOM(): string {
+  // Try various selectors that Claude might use for email display
+  const selectors = [
+    '.text-text-500.truncate',
+    '[class*="text-text-500"][class*="truncate"]',
+    '[class*="overflow-ellipsis"][class*="truncate"]',
+    '.pt-1.px-2.pb-2.truncate',
+    '[data-testid="user-email"]'
+  ];
+  
+  for (const selector of selectors) {
+    const el = document.querySelector(selector);
+    if (el) {
+      const text = el.textContent?.trim() || '';
+      // Basic email validation
+      if (text.includes('@') && text.includes('.')) {
+        console.log('[CAS] Got email from DOM with selector:', selector, text);
+        return text;
+      }
+    }
+  }
+  return '';
+}
+
 // Fetch current account info from /api/account with DOM fallback for email
 async function fetchCurrentAccountInfo(): Promise<CurrentAccount | null> {
   try {
@@ -74,11 +111,7 @@ async function fetchCurrentAccountInfo(): Promise<CurrentAccount | null> {
     
     // Fallback: try to get email from DOM if API didn't return it
     if (!email) {
-      const emailEl = document.querySelector('.text-text-500.truncate, [class*="text-text-500"][class*="truncate"]');
-      if (emailEl) {
-        email = emailEl.textContent?.trim() || '';
-        console.log('[CAS] Got email from DOM:', email);
-      }
+      email = getEmailFromDOM();
     }
     
     return {
@@ -92,9 +125,31 @@ async function fetchCurrentAccountInfo(): Promise<CurrentAccount | null> {
   }
 }
 
+// Retry fetching email from DOM after a delay (for SPA loading)
+async function retryEmailDetection(): Promise<void> {
+  if (currentAccount && !currentAccount.email) {
+    // Wait for DOM to fully load
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    const email = getEmailFromDOM();
+    if (email) {
+      currentAccount.email = email;
+      console.log('[CAS] Email detected on retry:', email);
+      
+      // Update saved account if exists
+      const savedIdx = accounts.findIndex(a => a.sessionKey === currentSessionKey);
+      if (savedIdx !== -1 && !accounts[savedIdx].email) {
+        accounts[savedIdx].email = email;
+        await saveAccounts(accounts);
+        console.log('[CAS] Updated saved account with email');
+      }
+    }
+  }
+}
+
 // Auto-save current account if not already in the list
 async function autoSaveCurrentAccount(): Promise<void> {
   if (!currentAccount || !currentSessionKey) return;
+  if (!settings.autoSave) return;
   
   // Check if already saved (by email or sessionKey)
   const existingByEmail = accounts.find(a => 
@@ -137,6 +192,10 @@ async function switchTo(i: number): Promise<void> {
     return;
   }
   
+  if (settings.confirmSwitch) {
+    if (!confirm(`Switch to ${acc.name}?`)) return;
+  }
+  
   console.log('[CAS] Switching to account:', acc.name);
   
   const response = await chrome.runtime.sendMessage({
@@ -162,6 +221,11 @@ async function removeAccount(i: number): Promise<void> {
     renderCurrentAccount();
     renderList();
   }
+}
+
+// Edit account
+function editAccount(i: number): void {
+  openEditModal(i);
 }
 
 // Check if sidebar is collapsed
@@ -294,6 +358,18 @@ function injectStyles(): void {
       text-overflow: ellipsis;
     }
     #cas-current-email { font-size: 11px; color: #888; }
+    .cas-current-edit {
+      background: none;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      padding: 4px;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .cas-current-edit:hover { color: #fff; }
+    #cas-current-account:hover .cas-current-edit { opacity: 1; }
 
     #cas-list { max-height: 200px; overflow-y: auto; }
     #cas-list-label {
@@ -314,7 +390,7 @@ function injectStyles(): void {
     }
     .cas-item:last-child { border-bottom: none; }
     .cas-item:hover { background: #2a2a28; }
-    .cas-item:hover .cas-item-remove { opacity: 1; }
+    .cas-item:hover .cas-item-actions { opacity: 1; }
     .cas-avatar {
       width: 32px;
       height: 32px;
@@ -353,8 +429,13 @@ function injectStyles(): void {
     }
     .cas-item-badge.work { background: rgba(21,101,192,0.2); color: #64b5f6; }
     .cas-item-badge.personal { background: rgba(123,31,162,0.2); color: #ce93d8; }
-    .cas-item-remove {
+    .cas-item-actions {
       opacity: 0;
+      display: flex;
+      gap: 4px;
+      transition: opacity 0.15s;
+    }
+    .cas-item-edit, .cas-item-remove {
       background: none;
       border: none;
       color: #888;
@@ -364,6 +445,7 @@ function injectStyles(): void {
       line-height: 1;
       transition: opacity 0.15s;
     }
+    .cas-item-edit:hover { color: #fff; }
     .cas-item-remove:hover { color: #e53e3e; }
 
     #cas-actions { padding: 12px 16px; display: flex; gap: 8px; }
@@ -511,6 +593,88 @@ function injectStyles(): void {
     .cas-advanced-toggle:hover { color: #aaa; }
     .cas-advanced-content { display: none; }
     .cas-advanced-content.open { display: block; }
+    
+    /* Settings Modal */
+    #cas-settings-bg {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 9999999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    #cas-settings-bg.open { display: flex; }
+    #cas-settings-modal {
+      background: #1e1e1c;
+      border: 1px solid #3f3f3c;
+      border-radius: 12px;
+      width: 360px;
+      max-width: 90vw;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .cas-settings-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid #3f3f3c;
+      font-weight: 600;
+      font-size: 14px;
+      color: #f5f4ef;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .cas-settings-close {
+      background: none;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      font-size: 18px;
+    }
+    .cas-settings-close:hover { color: #fff; }
+    .cas-settings-section {
+      padding: 16px;
+      border-bottom: 1px solid #3f3f3c;
+    }
+    .cas-settings-section:last-child { border-bottom: none; }
+    .cas-settings-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+    }
+    .cas-setting-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+    }
+    .cas-setting-label { font-size: 13px; color: #f5f4ef; }
+    .cas-setting-desc { font-size: 11px; color: #888; margin-top: 2px; }
+    .cas-toggle {
+      width: 40px;
+      height: 22px;
+      background: #3f3f3c;
+      border-radius: 11px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .cas-toggle.on { background: #c96442; }
+    .cas-toggle::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      background: #fff;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: left 0.2s;
+    }
+    .cas-toggle.on::after { left: 20px; }
   `;
   document.head.appendChild(style);
 }
@@ -526,7 +690,15 @@ function createPopup(): void {
   popup.innerHTML = `
     <div id="cas-popup-header">
       <span>Switch Account</span>
-      <button id="cas-popup-close">&times;</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button id="cas-popup-settings" title="Settings" style="background:none;border:none;color:#888;cursor:pointer;padding:4px;display:flex;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+          </svg>
+        </button>
+        <button id="cas-popup-close">&times;</button>
+      </div>
     </div>
     <div id="cas-current"></div>
     <div id="cas-list-label">Other Accounts</div>
@@ -536,6 +708,7 @@ function createPopup(): void {
   document.body.appendChild(popup);
 
   popup.querySelector('#cas-popup-close')!.addEventListener('click', () => popup!.classList.remove('open'));
+  popup.querySelector('#cas-popup-settings')!.addEventListener('click', () => openSettingsModal());
   
   renderCurrentAccount();
   renderList();
@@ -558,8 +731,17 @@ function renderCurrentAccount(): void {
         <div id="cas-current-name">${displayAcc.name}</div>
         <div id="cas-current-email">${displayAcc.email || 'No email'}</div>
       </div>
+      ${currentIdx !== -1 ? `<button class="cas-current-edit" data-idx="${currentIdx}" title="Edit">✎</button>` : ''}
     </div>
   `;
+  
+  // Bind edit button for current account
+  const editBtn = container.querySelector('.cas-current-edit');
+  if (editBtn) {
+    editBtn.addEventListener('click', () => {
+      openEditModal(currentIdx);
+    });
+  }
 }
 
 function renderList(): void {
@@ -587,7 +769,10 @@ function renderList(): void {
           <div class="cas-item-email">${a.email || ''}</div>
         </div>
         <span class="cas-item-badge ${a.type || 'work'}">${a.type || 'work'}</span>
-        <button class="cas-item-remove" data-i="${realIdx}" title="Remove account">&times;</button>
+        <div class="cas-item-actions">
+          <button class="cas-item-edit" data-i="${realIdx}" title="Edit account">✎</button>
+          <button class="cas-item-remove" data-i="${realIdx}" title="Remove account">&times;</button>
+        </div>
       </div>
     `;
   }).join('');
@@ -595,9 +780,17 @@ function renderList(): void {
   list.querySelectorAll('.cas-item').forEach(el => {
     el.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
-      if (target.classList.contains('cas-item-remove')) return;
+      if (target.classList.contains('cas-item-remove') || target.classList.contains('cas-item-edit')) return;
       const idx = parseInt((el as HTMLElement).dataset.i!);
       switchTo(idx);
+    });
+  });
+  
+  list.querySelectorAll('.cas-item-edit').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = parseInt((el as HTMLElement).dataset.i!);
+      openEditModal(idx);
     });
   });
   
@@ -633,6 +826,89 @@ function createModal(): void {
   `;
   document.body.appendChild(modalBg);
   modalBg.addEventListener('click', (e) => { if (e.target === modalBg) closeModal(); });
+}
+
+let settingsBg: HTMLElement | null = null;
+
+function createSettingsModal(): void {
+  const old = document.getElementById('cas-settings-bg');
+  if (old) old.remove();
+
+  settingsBg = document.createElement('div');
+  settingsBg.id = 'cas-settings-bg';
+  settingsBg.innerHTML = `
+    <div id="cas-settings-modal">
+      <div class="cas-settings-header">
+        <span>Settings</span>
+        <button class="cas-settings-close">&times;</button>
+      </div>
+      <div class="cas-settings-section">
+        <div class="cas-settings-title">Appearance</div>
+        <div class="cas-setting-row">
+          <div>
+            <div class="cas-setting-label">Show on Claude.ai</div>
+            <div class="cas-setting-desc">Display floating button</div>
+          </div>
+          <div class="cas-toggle" data-setting="showOnSite"></div>
+        </div>
+        <div class="cas-setting-row">
+          <div>
+            <div class="cas-setting-label">Keyboard Shortcut</div>
+            <div class="cas-setting-desc">Alt+S to toggle switcher</div>
+          </div>
+          <div class="cas-toggle" data-setting="keyboardShortcut"></div>
+        </div>
+      </div>
+      <div class="cas-settings-section">
+        <div class="cas-settings-title">Behavior</div>
+        <div class="cas-setting-row">
+          <div>
+            <div class="cas-setting-label">Auto-save Accounts</div>
+            <div class="cas-setting-desc">Save new accounts on login</div>
+          </div>
+          <div class="cas-toggle" data-setting="autoSave"></div>
+        </div>
+        <div class="cas-setting-row">
+          <div>
+            <div class="cas-setting-label">Confirm Before Switch</div>
+            <div class="cas-setting-desc">Ask before switching</div>
+          </div>
+          <div class="cas-toggle" data-setting="confirmSwitch"></div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(settingsBg);
+  
+  settingsBg.addEventListener('click', (e) => { if (e.target === settingsBg) closeSettingsModal(); });
+  settingsBg.querySelector('.cas-settings-close')!.addEventListener('click', closeSettingsModal);
+  
+  // Bind toggle clicks
+  settingsBg.querySelectorAll('.cas-toggle').forEach(el => {
+    el.addEventListener('click', async () => {
+      const setting = (el as HTMLElement).dataset.setting as keyof Settings;
+      (settings as any)[setting] = !(settings as any)[setting];
+      el.classList.toggle('on', (settings as any)[setting]);
+      await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
+    });
+  });
+}
+
+function openSettingsModal(): void {
+  if (!settingsBg) createSettingsModal();
+  
+  // Update toggles to reflect current settings
+  settingsBg!.querySelectorAll('.cas-toggle').forEach(el => {
+    const setting = (el as HTMLElement).dataset.setting as keyof Settings;
+    el.classList.toggle('on', (settings as any)[setting]);
+  });
+  
+  popup?.classList.remove('open');
+  settingsBg!.classList.add('open');
+}
+
+function closeSettingsModal(): void {
+  settingsBg?.classList.remove('open');
 }
 
 function openModal(editIdx: number | null = null): void {
@@ -752,6 +1028,11 @@ function closeModal(): void {
   modalBg?.classList.remove('open');
 }
 
+// Alias for editing existing accounts
+function openEditModal(idx: number): void {
+  openModal(idx);
+}
+
 function injectButton(): boolean {
   if (document.getElementById('cas-btn')) return true;
 
@@ -775,8 +1056,8 @@ function injectButton(): boolean {
 async function init(): Promise<void> {
   console.log('[CAS] v3.1.0 initializing...');
   
-  // Load settings first to check if we should show UI on site
-  const settings = await loadSettings();
+  // Load settings first
+  settings = await loadSettings();
   
   // Load saved accounts
   accounts = await loadAccounts();
@@ -792,6 +1073,9 @@ async function init(): Promise<void> {
     await autoSaveCurrentAccount();
   }
   
+  // Retry email detection after DOM loads (for SPA)
+  retryEmailDetection();
+  
   // Only show UI on site if setting is enabled
   if (!settings.showOnSite) {
     console.log('[CAS] UI on site disabled via settings');
@@ -802,6 +1086,7 @@ async function init(): Promise<void> {
   updateSidebarState();
   createPopup();
   createModal();
+  createSettingsModal();
   injectButton();
 
   const observer = new MutationObserver(() => {
@@ -815,12 +1100,13 @@ async function init(): Promise<void> {
   setInterval(updateSidebarState, 1000);
 
   document.addEventListener('keydown', (e) => {
-    if (e.altKey && e.key.toLowerCase() === 's') {
+    if (settings.keyboardShortcut && e.altKey && e.key.toLowerCase() === 's') {
       e.preventDefault();
       popup?.classList.toggle('open');
     }
-    if (e.key === 'Escape' && popup?.classList.contains('open')) {
-      popup.classList.remove('open');
+    if (e.key === 'Escape') {
+      if (popup?.classList.contains('open')) popup.classList.remove('open');
+      if (settingsBg?.classList.contains('open')) settingsBg.classList.remove('open');
     }
   });
 

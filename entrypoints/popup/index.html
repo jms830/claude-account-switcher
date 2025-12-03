@@ -4,11 +4,14 @@
   <meta charset="UTF-8">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
+    html, body {
       width: 320px;
+      min-height: 200px;
+      max-height: 500px;
       background: #1e1e1c;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       color: #f5f4ef;
+      overflow-y: auto;
     }
     #popup-header {
       padding: 14px 16px;
@@ -72,6 +75,18 @@
       font-size: 11px;
       color: #888;
     }
+    .current-edit-btn {
+      background: none;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      padding: 4px;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .current-edit-btn:hover { color: #fff; }
+    #current-account:hover .current-edit-btn { opacity: 1; }
     
     #list-label {
       font-size: 10px;
@@ -175,11 +190,22 @@
     #settings-panel.open {
       display: block;
     }
+    .settings-content {
+      max-height: 400px;
+      overflow-y: auto;
+    }
     .settings-section {
       padding: 16px;
       border-bottom: 1px solid #3f3f3c;
     }
     .settings-section:last-child { border-bottom: none; }
+    .settings-section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+    }
     .setting-row {
       display: flex;
       justify-content: space-between;
@@ -303,7 +329,16 @@
 <body>
   <div id="main-panel">
     <div id="popup-header">
-      <span>Claude Account Switcher</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span>Claude Account Switcher</span>
+        <button id="open-claude-btn" title="Open Claude.ai" style="background:none;border:none;color:#888;cursor:pointer;padding:2px;display:flex;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+            <polyline points="15 3 21 3 21 9"/>
+            <line x1="10" y1="14" x2="21" y2="3"/>
+          </svg>
+        </button>
+      </div>
       <button id="settings-btn" title="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="3"/>
@@ -333,13 +368,63 @@
       <button class="back-btn" id="back-btn">← Back</button>
       <span>Settings</span>
     </div>
-    <div class="settings-section">
-      <div class="setting-row">
-        <div>
-          <div class="setting-label">Show on Claude.ai</div>
-          <div class="setting-desc">Display floating button on claude.ai</div>
+    <div class="settings-content">
+      <div class="settings-section">
+        <div class="settings-section-title">Appearance</div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Show on Claude.ai</div>
+            <div class="setting-desc">Display floating button on claude.ai</div>
+          </div>
+          <div class="toggle" id="toggle-show-on-site"></div>
         </div>
-        <div class="toggle" id="toggle-show-on-site"></div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Keyboard Shortcut</div>
+            <div class="setting-desc">Alt+S to toggle switcher</div>
+          </div>
+          <div class="toggle" id="toggle-keyboard-shortcut"></div>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-section-title">Behavior</div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Auto-save Accounts</div>
+            <div class="setting-desc">Automatically save new accounts on login</div>
+          </div>
+          <div class="toggle" id="toggle-auto-save"></div>
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Confirm Before Switch</div>
+            <div class="setting-desc">Ask before switching accounts</div>
+          </div>
+          <div class="toggle" id="toggle-confirm-switch"></div>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-section-title">Data</div>
+        <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div class="setting-label">Export Accounts</div>
+              <div class="setting-desc">Download account list as JSON</div>
+            </div>
+            <button class="btn btn-cancel" id="export-btn" style="padding: 6px 12px;">Export</button>
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#888;cursor:pointer;">
+            <input type="checkbox" id="export-include-keys" style="accent-color:#c96442;">
+            Include session keys (security risk!)
+          </label>
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Clear All Data</div>
+            <div class="setting-desc">Remove all saved accounts</div>
+          </div>
+          <button class="btn btn-cancel" id="clear-btn" style="padding: 6px 12px; color: #e53e3e;">Clear</button>
+        </div>
       </div>
     </div>
   </div>

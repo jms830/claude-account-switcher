@@ -14,10 +14,20 @@ interface Account {
 
 interface Settings {
   showOnSite: boolean;
+  keyboardShortcut: boolean;
+  autoSave: boolean;
+  confirmSwitch: boolean;
 }
 
+const DEFAULT_SETTINGS: Settings = {
+  showOnSite: true,
+  keyboardShortcut: true,
+  autoSave: true,
+  confirmSwitch: false
+};
+
 let accounts: Account[] = [];
-let settings: Settings = { showOnSite: true };
+let settings: Settings = { ...DEFAULT_SETTINGS };
 let editingIndex: number | null = null;
 
 async function loadAccounts(): Promise<Account[]> {
@@ -32,7 +42,7 @@ async function saveAccounts(accs: Account[]): Promise<void> {
 
 async function loadSettings(): Promise<Settings> {
   const result = await chrome.storage.local.get(SETTINGS_KEY);
-  return result[SETTINGS_KEY] || { showOnSite: true };
+  return { ...DEFAULT_SETTINGS, ...result[SETTINGS_KEY] };
 }
 
 async function saveSettings(s: Settings): Promise<void> {
@@ -57,7 +67,11 @@ function getInitials(name: string): string {
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
-async function switchToAccount(sessionKey: string): Promise<void> {
+async function switchToAccount(sessionKey: string, accountName: string): Promise<void> {
+  if (settings.confirmSwitch) {
+    if (!confirm(`Switch to ${accountName}?`)) return;
+  }
+  
   await chrome.cookies.remove({ url: 'https://claude.ai', name: 'sessionKey' });
   await chrome.cookies.set({
     url: 'https://claude.ai',
@@ -84,6 +98,7 @@ async function switchToAccount(sessionKey: string): Promise<void> {
 function renderCurrentAccount(currentKey: string | null): void {
   const container = document.getElementById('current-account')!;
   const currentAccount = currentKey ? accounts.find(a => a.sessionKey === currentKey) : null;
+  const currentIdx = currentAccount ? accounts.indexOf(currentAccount) : -1;
   
   if (currentAccount) {
     container.innerHTML = `
@@ -92,7 +107,11 @@ function renderCurrentAccount(currentKey: string | null): void {
         <div class="account-name">${currentAccount.name}</div>
         <div class="account-email">${currentAccount.email || 'No email'}</div>
       </div>
+      <button class="current-edit-btn" data-idx="${currentIdx}" title="Edit">✎</button>
     `;
+    container.querySelector('.current-edit-btn')?.addEventListener('click', () => {
+      openEditModal(currentIdx);
+    });
   } else if (currentKey) {
     container.innerHTML = `
       <div class="avatar" style="background:#c96442">?</div>
@@ -149,7 +168,7 @@ function renderAccountsList(currentKey: string | null): void {
       const target = e.target as HTMLElement;
       if (target.classList.contains('item-btn')) return;
       const idx = parseInt((el as HTMLElement).dataset.idx!);
-      switchToAccount(accounts[idx].sessionKey);
+      switchToAccount(accounts[idx].sessionKey, accounts[idx].name);
     });
   });
   
@@ -249,8 +268,11 @@ function showSettings(): void {
   document.getElementById('main-panel')!.style.display = 'none';
   document.getElementById('settings-panel')!.classList.add('open');
   
-  const toggle = document.getElementById('toggle-show-on-site')!;
-  toggle.classList.toggle('on', settings.showOnSite);
+  // Update all toggles to reflect current settings
+  document.getElementById('toggle-show-on-site')!.classList.toggle('on', settings.showOnSite);
+  document.getElementById('toggle-keyboard-shortcut')!.classList.toggle('on', settings.keyboardShortcut);
+  document.getElementById('toggle-auto-save')!.classList.toggle('on', settings.autoSave);
+  document.getElementById('toggle-confirm-switch')!.classList.toggle('on', settings.confirmSwitch);
 }
 
 function hideSettings(): void {
@@ -266,16 +288,79 @@ async function init(): Promise<void> {
   renderCurrentAccount(currentKey);
   renderAccountsList(currentKey);
   
+  // Open Claude.ai button
+  document.getElementById('open-claude-btn')!.addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://claude.ai' });
+  });
+  
   // Settings button
   document.getElementById('settings-btn')!.addEventListener('click', showSettings);
   document.getElementById('back-btn')!.addEventListener('click', hideSettings);
   
-  // Settings toggle
+  // Settings toggles
   document.getElementById('toggle-show-on-site')!.addEventListener('click', async (e) => {
     const toggle = e.currentTarget as HTMLElement;
     settings.showOnSite = !settings.showOnSite;
     toggle.classList.toggle('on', settings.showOnSite);
     await saveSettings(settings);
+  });
+  
+  document.getElementById('toggle-keyboard-shortcut')!.addEventListener('click', async (e) => {
+    const toggle = e.currentTarget as HTMLElement;
+    settings.keyboardShortcut = !settings.keyboardShortcut;
+    toggle.classList.toggle('on', settings.keyboardShortcut);
+    await saveSettings(settings);
+  });
+  
+  document.getElementById('toggle-auto-save')!.addEventListener('click', async (e) => {
+    const toggle = e.currentTarget as HTMLElement;
+    settings.autoSave = !settings.autoSave;
+    toggle.classList.toggle('on', settings.autoSave);
+    await saveSettings(settings);
+  });
+  
+  document.getElementById('toggle-confirm-switch')!.addEventListener('click', async (e) => {
+    const toggle = e.currentTarget as HTMLElement;
+    settings.confirmSwitch = !settings.confirmSwitch;
+    toggle.classList.toggle('on', settings.confirmSwitch);
+    await saveSettings(settings);
+  });
+  
+  // Export button
+  document.getElementById('export-btn')!.addEventListener('click', () => {
+    const includeKeys = (document.getElementById('export-include-keys') as HTMLInputElement).checked;
+    const exportData = accounts.map(a => {
+      const data: any = {
+        name: a.name,
+        email: a.email,
+        type: a.type,
+        color: a.color,
+        createdAt: a.createdAt
+      };
+      if (includeKeys) {
+        data.sessionKey = a.sessionKey;
+      }
+      return data;
+    });
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = includeKeys ? 'claude-accounts-with-keys.json' : 'claude-accounts.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+  
+  // Clear button
+  document.getElementById('clear-btn')!.addEventListener('click', async () => {
+    if (confirm('Remove ALL saved accounts? This cannot be undone.')) {
+      accounts = [];
+      await saveAccounts(accounts);
+      const currentKey = await getCurrentSessionKey();
+      renderCurrentAccount(currentKey);
+      renderAccountsList(currentKey);
+      hideSettings();
+    }
   });
   
   // Edit modal
